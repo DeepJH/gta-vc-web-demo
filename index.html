@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Grand Theft Auto: Vice City - Web 3D 纯网页重写版 (v0.6)</title>
+    <title>Grand Theft Auto: Vice City - Web 3D 纯网页重写版 (v0.8 - 城市交通、多武器与声场系统)</title>
     <style>
         * {
             box-sizing: border-box;
@@ -29,6 +29,30 @@
             display: block;
             z-index: 1;
         }
+        
+        /* 80s 迈阿密后处理暗角与复古扫描线 */
+        #postfx-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+            background: radial-gradient(circle, transparent 65%, rgba(10, 4, 18, 0.45) 100%);
+            box-shadow: inset 0 0 100px rgba(0, 0, 0, 0.4);
+        }
+        .rain-droplets {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 6;
+            display: none;
+        }
+
         /* VC 经典霓虹 HUD */
         #hud {
             position: absolute;
@@ -213,6 +237,9 @@
 </head>
 <body>
     <canvas id="webgl-canvas"></canvas>
+    <div id="postfx-overlay"></div>
+    <canvas id="rain-canvas" class="rain-droplets"></canvas>
+
 
     <div id="hud">
         <div class="hud-top-right">
@@ -270,8 +297,10 @@
         <button class="start-btn" id="start-btn">点击进入罪恶都市 (START GAME)</button>
         <div class="instructions-card">
             <p>🕹️ <span>操作指南</span>：</p>
-            <p>【步行模式】 <span>W A S D</span> 移动 | <span>鼠标滑动</span> 旋转视角 | <span>空格</span> 跳跃 | <span>左键</span> 射击</p>
-            <p>【载具模式】 靠近跑车按 <span>F</span> 上车 / 下车 | <span>W / S</span> 油门与刹车 | <span>A / D</span> 转向</p>
+            <p>【步行模式】 <span>W A S D</span> 移动 | <span>Q / E</span> 轮换武器 (拳头/微冲/散弹枪) | <span>鼠标滑动</span> 旋转视角 | <span>空格</span> 跳跃 | <span>左键</span> 射击</p>
+            <p>【气象控制】 随时按 <span>T</span> 切换迈阿密暴风雨天气与雷暴
+            </p><p>
+            【载具模式】 靠近跑车按 <span>F</span> 上车 / 下车 | <span>W / S</span> 油门与刹车 | <span>A / D</span> 转向</p>
         </div>
     </div>
 
@@ -284,6 +313,112 @@
             init() {
                 if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
             }
+            
+            // 持续下雨环境音回路
+            startRainAmbient() {
+                if (!this.ctx || this.rainSource) return;
+                const bufferSize = this.ctx.sampleRate * 2;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                let b0 = 0, b1 = 0, b2 = 0;
+                for (let i = 0; i < bufferSize; i++) {
+                    const white = Math.random() * 2 - 1;
+                    b0 = 0.99886 * b0 + white * 0.0555179;
+                    b1 = 0.99332 * b1 + white * 0.0750759;
+                    b2 = 0.96900 * b2 + white * 0.1538520;
+                    data[i] = (b0 + b1 + b2) * 0.12;
+                }
+                this.rainSource = this.ctx.createBufferSource();
+                this.rainSource.buffer = buffer;
+                this.rainSource.loop = true;
+                this.rainFilter = this.ctx.createBiquadFilter();
+                this.rainFilter.type = 'lowpass';
+                this.rainFilter.frequency.value = 800;
+                this.rainGain = this.ctx.createGain();
+                this.rainGain.gain.setValueAtTime(0.01, this.ctx.currentTime);
+                this.rainGain.gain.linearRampToValueAtTime(0.22, this.ctx.currentTime + 1.2);
+                this.rainSource.connect(this.rainFilter);
+                this.rainFilter.connect(this.rainGain);
+                this.rainGain.connect(this.ctx.destination);
+                this.rainSource.start();
+            }
+
+            stopRainAmbient() {
+                if (this.rainGain && this.rainSource) {
+                    this.rainGain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.8);
+                    setTimeout(() => {
+                        if (this.rainSource) {
+                            try { this.rainSource.stop(); } catch(e) {}
+                            this.rainSource = null;
+                        }
+                    }, 900);
+                }
+            }
+
+            // 轮胎急刹与漂移尖叫音效 (Tire Skid)
+            playTireSkid() {
+                if (!this.ctx) return;
+                const bufferSize = Math.floor(this.ctx.sampleRate * 0.18);
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.sin(i * 0.08);
+                }
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(1800, this.ctx.currentTime);
+                filter.Q.value = 3.0;
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.18, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.18);
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start();
+            }
+
+            // 散弹枪射击音效 (Shotgun Blast)
+            playShotgun() {
+                if (!this.ctx) return;
+                const bufferSize = Math.floor(this.ctx.sampleRate * 0.28);
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.05));
+                }
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(900, this.ctx.currentTime);
+                filter.frequency.exponentialRampToValueAtTime(60, this.ctx.currentTime + 0.28);
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(1.0, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.28);
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start();
+            }
+
+            // 拳头挥拳攻击音效
+            playPunch() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(160, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.09);
+                gain.gain.setValueAtTime(0.5, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.09);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.09);
+            }
+
             playGunshot() {
                 if (!this.ctx) return;
                 const bufferSize = Math.floor(this.ctx.sampleRate * 0.12);
@@ -323,6 +458,30 @@
             
             
             
+            
+            playThunder() {
+                if (!this.ctx) return;
+                const bufferSize = this.ctx.sampleRate * 0.8;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.25));
+                }
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(250, this.ctx.currentTime);
+                filter.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.8);
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.9, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.8);
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start();
+            }
+
             playSynthWaveBeat() {
                 if (!this.ctx) return;
                 const now = this.ctx.currentTime;
@@ -392,6 +551,15 @@
         }
         const sfx = new VCAudioEngine();
         let wantedLevel = 0;
+        
+        // --- 多武器状态机 (Q/E 轮换) ---
+        const weaponList = [
+            { id: 'fist', name: 'FIST (拳头)', ammo: Infinity, maxAmmo: Infinity, range: 2.8, spread: 0 },
+            { id: 'uzi', name: 'UZI-9MM', ammo: 150, maxAmmo: 150, range: 60, spread: 0.03 },
+            { id: 'shotgun', name: 'SPAS-12 SHOTGUN', ammo: 40, maxAmmo: 40, range: 35, spread: 0.12 }
+        ];
+        let currentWeaponIndex = 1; // 默认 UZI
+
         let ammoCount = 150;
         const bullets = [];
         let walkCycle = 0;
@@ -404,10 +572,38 @@
         const crosshair = document.getElementById('crosshair');
 
         let scene, camera, renderer;
+
+        // --- 昼夜交替与气象系统 ---
+        let timeOfDay = 0; // 0..2PI
+        let rainParticles;
+        let isRaining = false;
+        let ambientLightRef, sunLightRef;
+        const neonStrips = [];
+
+        function initWeatherAndParticles() {
+            // 雨滴粒子系统
+            const rainCount = 1500;
+            const rainGeo = new THREE.BufferGeometry();
+            const rainPos = new Float32Array(rainCount * 3);
+            for (let i = 0; i < rainCount * 3; i += 3) {
+                rainPos[i] = (Math.random() - 0.5) * 300;
+                rainPos[i + 1] = Math.random() * 80;
+                rainPos[i + 2] = (Math.random() - 0.5) * 300;
+            }
+            rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
+            const rainMat = new THREE.PointsMaterial({
+                color: 0x88ccff,
+                size: 0.35,
+                transparent: true,
+                opacity: 0.65
+            });
+            rainParticles = new THREE.Points(rainGeo, rainMat);
+            rainParticles.visible = false;
+            scene.add(rainParticles);
+        }
+
         let player, car;
         let inVehicle = false;
-                sfx.playDoorSlam();
-                document.getElementById("speedo-box").style.display = "none";
         let keys = {};
         let cameraAngle = { yaw: 0, pitch: 0.2 };
         let isPointerLocked = false;
@@ -432,9 +628,11 @@
 
             // 光照设计：迈阿密夕阳阳光 + 霓虹环境光
             const ambientLight = new THREE.AmbientLight(0xffb7c5, 0.7);
+            ambientLightRef = ambientLight;
             scene.add(ambientLight);
 
             const sunLight = new THREE.DirectionalLight(0xffa040, 1.4);
+            sunLightRef = sunLight;
             sunLight.position.set(100, 120, 80);
             sunLight.castShadow = true;
             sunLight.shadow.mapSize.width = 2048;
@@ -450,6 +648,7 @@
 
             // 地面与 Ocean Beach 宽阔沿海公路
             createEnvironment();
+            initWeatherAndParticles();
 
             // 生成经典主角 Tommy Vercetti
             createPlayer();
@@ -466,6 +665,13 @@
             createVehicle();
             createPoliceCar(-8, -40);
             createPoliceCar(-8, 80);
+
+            // 生成沿街车道双向巡航的城市民用车辆
+            for (let z = -200; z <= 200; z += 55) {
+                createTrafficCar(14, z, 1);   // 北行车道
+                createTrafficCar(-14, z, -1); // 南行车道
+            }
+
 
             // 监听窗口与输入
             window.addEventListener('resize', onWindowResize);
@@ -528,6 +734,7 @@
                 const neonStrip = new THREE.Mesh(neonGeo, neonMat);
                 neonStrip.position.set(-50, height * 0.7, z);
                 scene.add(neonStrip);
+                neonStrips.push(neonStrip);
 
                 // 沿街椰子树 (Vice City 标志性 Palm Tree)
                 createPalmTree(32, z);
@@ -649,6 +856,49 @@
         }
 
         
+        
+        // --- 城市民用车巡航交通流 (Traffic Cars) ---
+        const trafficCars = [];
+        const trafficCarColors = [0xe74c3c, 0xf39c12, 0x2ecc71, 0x3498db, 0x9b59b6, 0xecf0f1];
+
+        function createTrafficCar(x, z, heading) {
+            const tCar = new THREE.Group();
+            const color = trafficCarColors[Math.floor(Math.random() * trafficCarColors.length)];
+
+            // 复古双门轿车外形
+            const bodyGeo = new THREE.BoxGeometry(2.2, 0.65, 4.4);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, metalness: 0.5 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 0.6;
+            body.castShadow = true;
+            tCar.add(body);
+
+            const topGeo = new THREE.BoxGeometry(1.7, 0.55, 2.2);
+            const topMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.2 });
+            const topMesh = new THREE.Mesh(topGeo, topMat);
+            topMesh.position.set(0, 1.15, -0.2);
+            tCar.add(topMesh);
+
+            const wheelGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.3, 16);
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+            [[-1.15, 0.38, 1.3], [1.15, 0.38, 1.3], [-1.15, 0.38, -1.3], [1.15, 0.38, -1.3]].forEach(pos => {
+                const w = new THREE.Mesh(wheelGeo, wheelMat);
+                w.rotation.z = Math.PI / 2;
+                w.position.set(...pos);
+                tCar.add(w);
+            });
+
+            tCar.position.set(x, 0, z);
+            tCar.rotation.y = (heading > 0 ? 0 : Math.PI);
+            tCar.userData = {
+                speed: 0.25 + Math.random() * 0.15,
+                heading: heading,
+                health: 100
+            };
+            scene.add(tCar);
+            trafficCars.push(tCar);
+        }
+
         const policeCars = [];
         function createPoliceCar(x, z) {
             const pCar = new THREE.Group();
@@ -767,6 +1017,17 @@
 
             window.addEventListener('keydown', e => {
                 keys[e.code] = true;
+
+                // Q / E 轮换武器
+                if (e.code === 'KeyQ') {
+                    currentWeaponIndex = (currentWeaponIndex - 1 + weaponList.length) % weaponList.length;
+                    updateWeaponHUD();
+                }
+                if (e.code === 'KeyE') {
+                    currentWeaponIndex = (currentWeaponIndex + 1) % weaponList.length;
+                    updateWeaponHUD();
+                }
+
                 
                 if (e.code === 'KeyR' && inVehicle) {
                     currentRadioStation = (currentRadioStation + 1) % radioStations.length;
@@ -775,6 +1036,19 @@
                     banner.style.display = 'block';
                     if (currentRadioStation < 3) sfx.playSynthWaveBeat();
                     setTimeout(() => { banner.style.display = 'none'; }, 2500);
+                }
+
+                
+                if (e.code === 'KeyT') {
+                    isRaining = !isRaining;
+                    rainParticles.visible = isRaining;
+                    document.getElementById('rain-canvas').style.display = (isRaining ? 'block' : 'none');
+                    if (isRaining) {
+                        sfx.playThunder();
+                        sfx.startRainAmbient();
+                    } else {
+                        sfx.stopRainAmbient();
+                    }
                 }
 
                 if (e.code === 'KeyF' || e.code === 'Enter') {
@@ -836,6 +1110,13 @@
                 document.querySelector('.vc-money').innerText = '$' + playerMoney.toString().padStart(8, '0');
             }
 
+        }
+
+        
+        function updateWeaponHUD() {
+            const w = weaponList[currentWeaponIndex];
+            const ammoText = (w.ammo === Infinity ? '∞' : `${w.ammo}/${w.maxAmmo}`);
+            document.getElementById('val-weapon').innerText = `${w.name} ${ammoText}`;
         }
 
         function shootWeapon() {
@@ -1052,6 +1333,57 @@
                 }
             }
 
+            
+            // 昼夜循环与天色演变 (黄昏 -> 霓虹深夜 -> 迈阿密黎明)
+            timeOfDay += 0.001;
+            const sunAngle = timeOfDay;
+            sunLightRef.position.set(Math.cos(sunAngle) * 120, Math.sin(sunAngle) * 120, 80);
+            const isNight = Math.sin(sunAngle) < 0;
+
+            if (isNight) {
+                scene.background.setHex(0x0a0515);
+                scene.fog.color.setHex(0x0a0515);
+                ambientLightRef.intensity = 0.25;
+                sunLightRef.intensity = 0.1;
+                neonStrips.forEach(s => s.material.color.setHex(0x00ffff));
+            } else {
+                scene.background.setHex(0x281236);
+                scene.fog.color.setHex(0x281236);
+                ambientLightRef.intensity = 0.7;
+                sunLightRef.intensity = 1.4;
+                neonStrips.forEach(s => s.material.color.setHex(0xff007f));
+            }
+
+            // 动态降雨天气
+            if (rainParticles.visible) {
+                const pos = rainParticles.geometry.attributes.position.array;
+                for (let i = 1; i < pos.length; i += 3) {
+                    pos[i] -= 1.8;
+                    if (pos[i] < 0) pos[i] = 80;
+                }
+                rainParticles.geometry.attributes.position.needsUpdate = true;
+            }
+
+            
+            // 城市交通流车辆自主沿车道行驶
+            trafficCars.forEach(t => {
+                t.translateZ(t.userData.speed * (t.userData.heading > 0 ? -1 : 1));
+                if (t.position.z > 300) t.position.z = -300;
+                else if (t.position.z < -300) t.position.z = 300;
+
+                // 玩家车辆与交通车相撞判定
+                if (inVehicle && car.position.distanceTo(t.position) < 3.2) {
+                    car.userData.speed *= 0.5;
+                    t.userData.speed *= 0.5;
+                    sfx.playTireSkid();
+                }
+            });
+
+            // 玩家高速转向漂移尖叫检测 (Tire Skid)
+            if (inVehicle && Math.abs(car.userData.speed) > 0.8 && (keys['KeyA'] || keys['KeyD'])) {
+                if (Math.random() < 0.2) sfx.playTireSkid();
+            }
+
             // 更新小地图雷达
             drawRadar();
         }
@@ -1091,6 +1423,15 @@
                 const pRelZ = (p.position.z - activePos.z) * 1.5;
                 ctx.fillStyle = '#00f0ff';
                 ctx.fillRect(pRelX - 3, pRelZ - 3, 6, 6);
+            });
+
+            
+            // 绘制交通民用车辆 (淡黄色方块)
+            trafficCars.forEach(t => {
+                const tRelX = (t.position.x - activePos.x) * 1.5;
+                const tRelZ = (t.position.z - activePos.z) * 1.5;
+                ctx.fillStyle = '#fffa65';
+                ctx.fillRect(tRelX - 2.5, tRelZ - 2.5, 5, 5);
             });
 
             ctx.fillStyle = '#ff4193';
