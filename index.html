@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Grand Theft Auto: Vice City - Web 3D 纯网页重写版 (v0.2)</title>
+    <title>Grand Theft Auto: Vice City - Web 3D 纯网页重写版 (v0.3)</title>
     <style>
         * {
             box-sizing: border-box;
@@ -232,6 +232,21 @@
             </div>
         </div>
 
+        
+        <!-- 罪恶都市通缉星级 Wanted Stars -->
+        <div id="wanted-stars" style="position: absolute; top: 120px; right: 28px; display: flex; gap: 6px; font-size: 26px;">
+            <span class="star" style="color: #444; text-shadow: 0 0 4px #000;">★</span>
+            <span class="star" style="color: #444; text-shadow: 0 0 4px #000;">★</span>
+            <span class="star" style="color: #444; text-shadow: 0 0 4px #000;">★</span>
+            <span class="star" style="color: #444; text-shadow: 0 0 4px #000;">★</span>
+            <span class="star" style="color: #444; text-shadow: 0 0 4px #000;">★</span>
+            <span class="star" style="color: #444; text-shadow: 0 0 4px #000;">★</span>
+        </div>
+        <!-- 跑车速度表 Speedometer -->
+        <div id="speedo-box" style="position: absolute; bottom: 30px; right: 30px; background: rgba(18,5,29,0.7); border: 2px solid #2edbf0; padding: 10px 18px; border-radius: 8px; display: none; text-align: center; box-shadow: 0 0 15px rgba(46,219,240,0.5);">
+            <div style="font-size: 11px; letter-spacing: 2px; color: #2edbf0;">SPEED (MPH)</div>
+            <div id="speedo-val" style="font-family: Impact, sans-serif; font-size: 34px; color: #ffe600;">0</div>
+        </div>
         <div id="radar-container">
             <canvas id="radar-canvas" width="140" height="140"></canvas>
         </div>
@@ -253,6 +268,69 @@
 
     <script>
         // --- 核心 WebGL 3D 场景与引擎逻辑 (v0.2 重构版本) ---
+        
+        // --- 80s 经典合成音效引擎 (Web Audio API 纯原生无外部依赖) ---
+        class VCAudioEngine {
+            constructor() { this.ctx = null; }
+            init() {
+                if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            playGunshot() {
+                if (!this.ctx) return;
+                const bufferSize = Math.floor(this.ctx.sampleRate * 0.12);
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.02));
+                }
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(1400, this.ctx.currentTime);
+                filter.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.12);
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.7, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.12);
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start();
+            }
+            playEngineRev(speedRatio) {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                const baseFreq = 40 + Math.abs(speedRatio) * 90;
+                osc.frequency.setValueAtTime(baseFreq, this.ctx.currentTime);
+                gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.08);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.08);
+            }
+            playDoorSlam() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(120, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.1);
+            }
+        }
+        const sfx = new VCAudioEngine();
+        let wantedLevel = 0;
+        let ammoCount = 150;
+        const bullets = [];
+        let walkCycle = 0;
         const canvas = document.getElementById('webgl-canvas');
         const overlay = document.getElementById('overlay-screen');
         const startBtn = document.getElementById('start-btn');
@@ -264,6 +342,8 @@
         let scene, camera, renderer;
         let player, car;
         let inVehicle = false;
+                sfx.playDoorSlam();
+                document.getElementById("speedo-box").style.display = "none";
         let keys = {};
         let cameraAngle = { yaw: 0, pitch: 0.2 };
         let isPointerLocked = false;
@@ -501,6 +581,13 @@
         }
 
         function setupInput() {
+
+            window.addEventListener('mousedown', (e) => {
+                if (e.button === 0 && isPointerLocked && !inVehicle) {
+                    shootWeapon();
+                }
+            });
+
             window.addEventListener('keydown', e => {
                 keys[e.code] = true;
                 if (e.code === 'KeyF' || e.code === 'Enter') {
@@ -511,7 +598,10 @@
                 keys[e.code] = false;
             });
 
+            
             startBtn.addEventListener('click', () => {
+                sfx.init();
+
                 overlay.style.display = 'none';
                 canvas.requestPointerLock();
                 crosshair.style.display = 'block';
@@ -530,14 +620,62 @@
             });
         }
 
+        
+        function shootWeapon() {
+            if (ammoCount <= 0) return;
+            ammoCount--;
+            sfx.playGunshot();
+            document.getElementById('val-weapon').innerText = 'UZI-9MM 30/' + ammoCount;
+
+            // 枪口火焰与弹道
+            const bulletGeo = new THREE.SphereGeometry(0.12, 6, 6);
+            const bulletMat = new THREE.MeshBasicMaterial({ color: 0xffe600 });
+            const bullet = new THREE.Mesh(bulletGeo, bulletMat);
+
+            const shootOrigin = player.position.clone().add(new THREE.Vector3(0, 1.6, 0));
+            const shootDir = new THREE.Vector3(
+                -Math.sin(cameraAngle.yaw) * Math.cos(cameraAngle.pitch),
+                Math.sin(cameraAngle.pitch),
+                -Math.cos(cameraAngle.yaw) * Math.cos(cameraAngle.pitch)
+            ).normalize();
+
+            bullet.position.copy(shootOrigin.addScaledVector(shootDir, 1.0));
+            bullet.userData = { dir: shootDir, life: 60 };
+            scene.add(bullet);
+            bullets.push(bullet);
+
+            // 击发增加警星几率
+            if (Math.random() < 0.15 && wantedLevel < 6) {
+                setWantedLevel(wantedLevel + 1);
+            }
+        }
+
+        function setWantedLevel(stars) {
+            wantedLevel = Math.min(6, Math.max(0, stars));
+            const starEls = document.querySelectorAll('#wanted-stars .star');
+            starEls.forEach((el, idx) => {
+                if (idx < wantedLevel) {
+                    el.style.color = '#ffe600';
+                    el.style.textShadow = '0 0 10px #ffaa00';
+                } else {
+                    el.style.color = '#444';
+                    el.style.textShadow = '0 0 4px #000';
+                }
+            });
+        }
+
         function toggleVehicle() {
             const dist = player.position.distanceTo(car.position);
             if (!inVehicle && dist < 5.0) {
                 inVehicle = true;
+                sfx.playDoorSlam();
+                document.getElementById("speedo-box").style.display = "block";
                 player.visible = false;
                 vehiclePrompt.style.display = 'none';
             } else if (inVehicle) {
                 inVehicle = false;
+                sfx.playDoorSlam();
+                document.getElementById("speedo-box").style.display = "none";
                 player.visible = true;
                 player.position.set(car.position.x - 2.5, 0, car.position.z);
             }
@@ -554,6 +692,13 @@
 
                 carData.speed *= carData.friction;
                 car.translateZ(-carData.speed);
+
+                if (keys['KeyW'] || keys['ArrowUp'] || keys['KeyS'] || keys['ArrowDown']) {
+                    if (Math.random() < 0.25) sfx.playEngineRev(carData.speed);
+                }
+                const speedMph = Math.round(Math.abs(carData.speed) * 85);
+                document.getElementById('speedo-val').innerText = speedMph;
+
 
                 // 相机跟随跑车第三人称电影视角
                 const offset = new THREE.Vector3(0, 3.2, 7.5).applyAxisAngle(new THREE.Vector3(0, 1, 0), car.rotation.y);
@@ -586,6 +731,18 @@
                 camera.position.y = player.position.y + Math.sin(cameraAngle.pitch) * camDist + 2.0;
                 camera.position.z = player.position.z + Math.cos(cameraAngle.yaw) * Math.cos(cameraAngle.pitch) * camDist;
                 camera.lookAt(player.position.x, player.position.y + 1.8, player.position.z);
+            }
+
+            
+            // 更新飞行子弹与弹道轨迹
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i];
+                b.position.addScaledVector(b.userData.dir, 3.5);
+                b.userData.life--;
+                if (b.userData.life <= 0) {
+                    scene.remove(b);
+                    bullets.splice(i, 1);
+                }
             }
 
             // 更新小地图雷达
