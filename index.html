@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Grand Theft Auto: Vice City - Web 3D 纯网页重写版 (v0.5)</title>
+    <title>Grand Theft Auto: Vice City - Web 3D 纯网页重写版 (v0.6)</title>
     <style>
         * {
             box-sizing: border-box;
@@ -247,6 +247,15 @@
             <div style="font-size: 11px; letter-spacing: 2px; color: #2edbf0;">SPEED (MPH)</div>
             <div id="speedo-val" style="font-family: Impact, sans-serif; font-size: 34px; color: #ffe600;">0</div>
         </div>
+        
+        <!-- 电台横幅 Radio Banner -->
+        <div id="radio-banner" style="position: absolute; top: 30px; left: 50%; transform: translateX(-50%); background: rgba(255, 65, 147, 0.9); border: 2px solid #ffe600; padding: 6px 24px; border-radius: 20px; font-weight: bold; font-size: 15px; letter-spacing: 2px; color: #fff; box-shadow: 0 0 15px rgba(255,65,147,0.8); display: none;">
+            📻 FLASH FM - 80s POP VIBES [R键切台]
+        </div>
+        <!-- 任务指引与完成提示 -->
+        <div id="mission-banner" style="position: absolute; top: 80px; left: 50%; transform: translateX(-50%); background: rgba(18,5,29,0.85); border: 1px solid #2edbf0; padding: 8px 20px; border-radius: 8px; font-size: 14px; color: #2edbf0; font-weight: bold; letter-spacing: 1px; text-shadow: 0 0 8px rgba(46,219,240,0.6);">
+            🎯 任务目标：清除 3 名黑帮暴徒 (0/3) 或 甩开警方通缉
+        </div>
         <div id="radar-container">
             <canvas id="radar-canvas" width="140" height="140"></canvas>
         </div>
@@ -313,6 +322,26 @@
             }
             
             
+            
+            playSynthWaveBeat() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                // 80s 经典合成贝斯与琶音音效
+                const notes = [220, 261.63, 329.63, 392.00, 440];
+                notes.forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.12);
+                    gain.gain.setValueAtTime(0.06, now + idx * 0.12);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + (idx + 1) * 0.12);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + idx * 0.12);
+                    osc.stop(now + (idx + 1) * 0.12);
+                });
+            }
+
             playCashPickup() {
                 if (!this.ctx) return;
                 const osc = this.ctx.createOscillator();
@@ -525,6 +554,11 @@
         }
 
         
+        
+        let currentRadioStation = 0;
+        const radioStations = ['FLASH FM - 80s POP', 'WAVE 103 - SYNTH & NEW WAVE', 'V-ROCK - 80s HEAVY ROCK', 'RADIO OFF (关闭)'];
+        let missionTargetCount = 0;
+
         const pedestrians = [];
         const droppedCash = [];
         let playerMoney = 350000;
@@ -733,6 +767,16 @@
 
             window.addEventListener('keydown', e => {
                 keys[e.code] = true;
+                
+                if (e.code === 'KeyR' && inVehicle) {
+                    currentRadioStation = (currentRadioStation + 1) % radioStations.length;
+                    const banner = document.getElementById('radio-banner');
+                    banner.innerText = '📻 ' + radioStations[currentRadioStation] + ' [R键切台]';
+                    banner.style.display = 'block';
+                    if (currentRadioStation < 3) sfx.playSynthWaveBeat();
+                    setTimeout(() => { banner.style.display = 'none'; }, 2500);
+                }
+
                 if (e.code === 'KeyF' || e.code === 'Enter') {
                     toggleVehicle();
                 }
@@ -779,6 +823,19 @@
             droppedCash.push(cashMesh);
 
             setWantedLevel(wantedLevel + 1);
+
+            missionTargetCount++;
+            const mb = document.getElementById('mission-banner');
+            if (missionTargetCount < 3) {
+                mb.innerText = "🎯 任务目标：清除 3 名黑帮暴徒 (" + missionTargetCount + "/3)";
+            } else {
+                mb.innerText = '🏆 任务完成！VICE CITY 赏金奖励 +,000！';
+                mb.style.borderColor = '#ffe600';
+                mb.style.color = '#ffe600';
+                playerMoney += 10000;
+                document.querySelector('.vc-money').innerText = '$' + playerMoney.toString().padStart(8, '0');
+            }
+
         }
 
         function shootWeapon() {
@@ -807,6 +864,19 @@
             // 击发增加警星几率
             if (Math.random() < 0.15 && wantedLevel < 6) {
                 setWantedLevel(wantedLevel + 1);
+
+            missionTargetCount++;
+            const mb = document.getElementById('mission-banner');
+            if (missionTargetCount < 3) {
+                mb.innerText = "🎯 任务目标：清除 3 名黑帮暴徒 (" + missionTargetCount + "/3)";
+            } else {
+                mb.innerText = '🏆 任务完成！VICE CITY 赏金奖励 +,000！';
+                mb.style.borderColor = '#ffe600';
+                mb.style.color = '#ffe600';
+                playerMoney += 10000;
+                document.querySelector('.vc-money').innerText = '$' + playerMoney.toString().padStart(8, '0');
+            }
+
             }
         }
 
@@ -830,6 +900,12 @@
                 inVehicle = true;
                 sfx.playDoorSlam();
                 document.getElementById("speedo-box").style.display = "block";
+
+                document.getElementById('radio-banner').style.display = 'block';
+                document.getElementById('radio-banner').innerText = '📻 ' + radioStations[currentRadioStation] + ' [R键切台]';
+                sfx.playSynthWaveBeat();
+                setTimeout(() => { document.getElementById('radio-banner').style.display = 'none'; }, 3000);
+
                 player.visible = false;
                 vehiclePrompt.style.display = 'none';
             } else if (inVehicle) {
