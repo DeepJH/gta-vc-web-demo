@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Grand Theft Auto: Vice City - Web 3D 纯网页重写版 (v0.8 - 城市交通、多武器与声场系统)</title>
+    <title>Grand Theft Auto: Vice City - Web 3D 纯网页重写版 (v0.9 - 爆炸破坏系统、海洋快艇物理与空中警力直升机)</title>
     <style>
         * {
             box-sizing: border-box;
@@ -534,6 +534,75 @@
                 osc.stop(now + 0.5);
             }
 
+            
+            // RPG 火箭发射与爆炸音效
+            playRocketLaunch() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(200, now);
+                osc.frequency.exponentialRampToValueAtTime(750, now + 0.15);
+                osc.frequency.exponentialRampToValueAtTime(180, now + 0.4);
+                gain.gain.setValueAtTime(0.7, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(now); osc.stop(now + 0.4);
+            }
+
+            playExplosion() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const bufferSize = Math.floor(this.ctx.sampleRate * 0.8);
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.2));
+                }
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(500, now);
+                filter.frequency.exponentialRampToValueAtTime(40, now + 0.8);
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(1.8, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+                noise.connect(filter); filter.connect(gain); gain.connect(this.ctx.destination);
+                noise.start(now);
+            }
+
+            playHeliChop() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(32, now);
+                gain.gain.setValueAtTime(0.08, now);
+                gain.gain.exponentialRampToValueAtTime(0.005, now + 0.1);
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(200, now);
+                osc.connect(filter); filter.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(now); osc.stop(now + 0.1);
+            }
+
+            playBoatEngine() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(50, now);
+                osc.frequency.linearRampToValueAtTime(75, now + 0.15);
+                gain.gain.setValueAtTime(0.12, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(now); osc.stop(now + 0.15);
+            }
+
             playDoorSlam() {
                 if (!this.ctx) return;
                 const osc = this.ctx.createOscillator();
@@ -556,7 +625,8 @@
         const weaponList = [
             { id: 'fist', name: 'FIST (拳头)', ammo: Infinity, maxAmmo: Infinity, range: 2.8, spread: 0 },
             { id: 'uzi', name: 'UZI-9MM', ammo: 150, maxAmmo: 150, range: 60, spread: 0.03 },
-            { id: 'shotgun', name: 'SPAS-12 SHOTGUN', ammo: 40, maxAmmo: 40, range: 35, spread: 0.12 }
+            { id: 'shotgun', name: 'SPAS-12 SHOTGUN', ammo: 40, maxAmmo: 40, range: 35, spread: 0.12 },
+            { id: 'rpg', name: 'RPG-7 ROCKET', ammo: 10, maxAmmo: 10, range: 220, spread: 0.01 }
         ];
         let currentWeaponIndex = 1; // 默认 UZI
 
@@ -601,6 +671,16 @@
             rainParticles.visible = false;
             scene.add(rainParticles);
         }
+
+        
+        // --- v0.9 爆炸破坏粒子、水域快艇与警方直升机系统 ---
+        const explosions = [];
+        const rockets = [];
+        let policeHeli = null;
+        let heliSpotLight = null;
+        let speedBoat = null;
+        let inBoat = false;
+        let waveTimer = 0;
 
         let player, car;
         let inVehicle = false;
@@ -662,7 +742,9 @@
 
 
             // 生成经典超级跑车 Infernus (兰博基尼风格)
-            createVehicle();
+                        createVehicle();
+            createDockAndBoat();
+            createPoliceHelicopter();
             createPoliceCar(-8, -40);
             createPoliceCar(-8, 80);
 
@@ -950,6 +1032,161 @@
             policeCars.push(pCar);
         }
 
+        
+        // 码头栈桥与经典快艇 Squalo
+        function createDockAndBoat() {
+            // 木质栈桥 Pier
+            const pierGeo = new THREE.BoxGeometry(45, 1.2, 10);
+            const pierMat = new THREE.MeshStandardMaterial({ color: 0x5d4037, roughness: 0.9 });
+            const pier = new THREE.Mesh(pierGeo, pierMat);
+            pier.position.set(235, 0.4, 0);
+            pier.receiveShadow = true;
+            scene.add(pier);
+
+            // 栈桥木桩
+            const pileGeo = new THREE.CylinderGeometry(0.5, 0.5, 6, 8);
+            const pileMat = new THREE.MeshStandardMaterial({ color: 0x3e2723 });
+            [-18, 0, 18].forEach(px => {
+                const pile1 = new THREE.Mesh(pileGeo, pileMat);
+                pile1.position.set(235 + px, -1.5, 4.5);
+                scene.add(pile1);
+                const pile2 = new THREE.Mesh(pileGeo, pileMat);
+                pile2.position.set(235 + px, -1.5, -4.5);
+                scene.add(pile2);
+            });
+
+            // 经典豪华快艇 Squalo (迈阿密水上超跑)
+            speedBoat = new THREE.Group();
+            const hullGeo = new THREE.ConeGeometry(2.4, 7.5, 4);
+            const hullMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0.6 });
+            const hull = new THREE.Mesh(hullGeo, hullMat);
+            hull.rotation.x = Math.PI / 2;
+            hull.rotation.y = Math.PI / 4;
+            hull.position.y = 0.5;
+            hull.castShadow = true;
+            speedBoat.add(hull);
+
+            // 挡风玻璃与甲板
+            const deckGeo = new THREE.BoxGeometry(2.2, 0.6, 3.8);
+            const deckMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.1 });
+            const deck = new THREE.Mesh(deckGeo, deckMat);
+            deck.position.set(0, 0.8, -0.6);
+            speedBoat.add(deck);
+
+            // 霓虹粉尾部扰流装饰
+            const trimGeo = new THREE.BoxGeometry(2.4, 0.2, 0.6);
+            const trimMat = new THREE.MeshBasicMaterial({ color: 0xff007f });
+            const trim = new THREE.Mesh(trimGeo, trimMat);
+            trim.position.set(0, 0.9, 2.4);
+            speedBoat.add(trim);
+
+            speedBoat.position.set(260, 0.2, 0);
+            speedBoat.userData = { speed: 0, maxSpeed: 2.2, accel: 0.025, friction: 0.97, roll: 0 };
+            scene.add(speedBoat);
+        }
+
+        // 警方武装直升机 Maverick (空对地探照灯巡逻)
+        function createPoliceHelicopter() {
+            policeHeli = new THREE.Group();
+
+            // 机身 (蓝白警用涂装)
+            const bodyGeo = new THREE.BoxGeometry(2.2, 2.0, 5.5);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x003366, roughness: 0.4 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 1.0;
+            body.castShadow = true;
+            policeHeli.add(body);
+
+            // 驾驶舱高光挡风玻璃
+            const glassGeo = new THREE.BoxGeometry(2.0, 1.4, 2.2);
+            const glassMat = new THREE.MeshStandardMaterial({ color: 0x88ccff, roughness: 0.1, transparent: true, opacity: 0.75 });
+            const glass = new THREE.Mesh(glassGeo, glassMat);
+            glass.position.set(0, 1.3, -1.8);
+            policeHeli.add(glass);
+
+            // 细长机尾与垂直尾翼
+            const tailGeo = new THREE.BoxGeometry(0.7, 0.7, 4.5);
+            const tailMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+            const tail = new THREE.Mesh(tailGeo, tailMat);
+            tail.position.set(0, 1.4, 4.5);
+            policeHeli.add(tail);
+
+            // 顶旋翼 (高速旋转的主螺旋桨)
+            const rotorGroup = new THREE.Group();
+            rotorGroup.position.set(0, 2.2, 0);
+            const bladeGeo = new THREE.BoxGeometry(0.35, 0.08, 9.5);
+            const bladeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+            const blade1 = new THREE.Mesh(bladeGeo, bladeMat);
+            const blade2 = blade1.clone();
+            blade2.rotation.y = Math.PI / 2;
+            rotorGroup.add(blade1);
+            rotorGroup.add(blade2);
+            policeHeli.add(rotorGroup);
+            policeHeli.userData.rotor = rotorGroup;
+
+            // 地面动态追逐探照灯 SpotLight
+            heliSpotLight = new THREE.SpotLight(0xffffff, 4.5, 120, Math.PI / 6, 0.4, 1.0);
+            heliSpotLight.position.set(0, 0, 0);
+            heliSpotLight.castShadow = true;
+            policeHeli.add(heliSpotLight);
+            policeHeli.add(heliSpotLight.target);
+
+            policeHeli.position.set(0, 35, -80);
+            policeHeli.visible = false;
+            scene.add(policeHeli);
+        }
+
+        // 触发爆炸火球、破坏与范围击倒 (RPG/车辆爆炸)
+        function triggerExplosion(pos, radius = 10.0) {
+            sfx.playExplosion();
+
+            // 生成火球膨胀网格
+            const fireGeo = new THREE.SphereGeometry(1.5, 16, 16);
+            const fireMat = new THREE.MeshBasicMaterial({ color: 0xff7700, transparent: true, opacity: 1.0 });
+            const fireMesh = new THREE.Mesh(fireGeo, fireMat);
+            fireMesh.position.copy(pos);
+            scene.add(fireMesh);
+
+            // 产生 25 颗全向飞溅火焰黑烟碎片
+            const particles = [];
+            for (let i = 0; i < 25; i++) {
+                const pGeo = new THREE.SphereGeometry(0.35 + Math.random() * 0.4, 6, 6);
+                const pMat = new THREE.MeshBasicMaterial({ color: (Math.random() < 0.6 ? 0xff3300 : 0x222222) });
+                const pMesh = new THREE.Mesh(pGeo, pMat);
+                pMesh.position.copy(pos);
+                const vel = new THREE.Vector3(
+                    (Math.random() - 0.5) * 1.5,
+                    Math.random() * 1.2 + 0.3,
+                    (Math.random() - 0.5) * 1.5
+                );
+                scene.add(pMesh);
+                particles.push({ mesh: pMesh, vel });
+            }
+
+            explosions.push({ fireMesh, particles, life: 40 });
+
+            // 范围破坏：击倒行人、引爆/炸飞附近车辆
+            pedestrians.forEach(ped => {
+                if (!ped.userData.isDead && ped.position.distanceTo(pos) < radius) {
+                    killPedestrian(ped);
+                }
+            });
+
+            trafficCars.forEach(t => {
+                if (t.position.distanceTo(pos) < radius) {
+                    t.userData.speed = 0;
+                    t.children[0].material.color.setHex(0x111111); // 烧焦
+                }
+            });
+
+            // 若在主角附近，震荡扣血
+            const pPos = (inVehicle ? car.position : (inBoat ? speedBoat.position : player.position));
+            if (pPos.distanceTo(pos) < radius) {
+                let curHealth = parseInt(healthEl.innerText);
+                healthEl.innerText = Math.max(0, curHealth - 35);
+            }
+        }
+
         function createVehicle() {
             // 经典超跑 Infernus (车身流线型与尾翼)
             car = new THREE.Group();
@@ -1120,15 +1357,21 @@
         }
 
         function shootWeapon() {
-            if (ammoCount <= 0) return;
-            ammoCount--;
-            sfx.playGunshot();
-            document.getElementById('val-weapon').innerText = 'UZI-9MM 30/' + ammoCount;
+            const curWeapon = weaponList[currentWeaponIndex];
+            if (curWeapon.ammo <= 0) return;
 
-            // 枪口火焰与弹道
-            const bulletGeo = new THREE.SphereGeometry(0.12, 6, 6);
-            const bulletMat = new THREE.MeshBasicMaterial({ color: 0xffe600 });
-            const bullet = new THREE.Mesh(bulletGeo, bulletMat);
+            if (curWeapon.id === 'fist') {
+                sfx.playPunch();
+                pedestrians.forEach(ped => {
+                    if (!ped.userData.isDead && player.position.distanceTo(ped.position) < curWeapon.range) {
+                        killPedestrian(ped);
+                    }
+                });
+                return;
+            }
+
+            curWeapon.ammo--;
+            updateWeaponHUD();
 
             const shootOrigin = player.position.clone().add(new THREE.Vector3(0, 1.6, 0));
             const shootDir = new THREE.Vector3(
@@ -1137,28 +1380,48 @@
                 -Math.cos(cameraAngle.yaw) * Math.cos(cameraAngle.pitch)
             ).normalize();
 
-            bullet.position.copy(shootOrigin.addScaledVector(shootDir, 1.0));
-            bullet.userData = { dir: shootDir, life: 60 };
+            if (curWeapon.id === 'uzi') {
+                sfx.playGunshot();
+                spawnBullet(shootOrigin, shootDir, curWeapon.spread);
+            } else if (curWeapon.id === 'shotgun') {
+                sfx.playShotgun();
+                for (let i = -2; i <= 2; i++) {
+                    const spreadDir = shootDir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), i * 0.04);
+                    spawnBullet(shootOrigin, spreadDir, curWeapon.spread);
+                }
+            } else if (curWeapon.id === 'rpg') {
+                sfx.playRocketLaunch();
+                // 生成高速 RPG 火箭弹
+                const rGeo = new THREE.CylinderGeometry(0.12, 0.12, 1.2, 8);
+                const rMat = new THREE.MeshBasicMaterial({ color: 0x44bd32 });
+                const rocket = new THREE.Mesh(rGeo, rMat);
+                rocket.rotation.x = Math.PI / 2;
+                rocket.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), shootDir);
+                rocket.position.copy(shootOrigin.addScaledVector(shootDir, 1.5));
+                rocket.userData = { dir: shootDir, life: 80 };
+                scene.add(rocket);
+                rockets.push(rocket);
+            }
+
+            if (Math.random() < 0.25 && wantedLevel < 6) {
+                setWantedLevel(wantedLevel + 1);
+            }
+        }
+
+        function spawnBullet(origin, dir, spread) {
+            const bulletGeo = new THREE.SphereGeometry(0.12, 6, 6);
+            const bulletMat = new THREE.MeshBasicMaterial({ color: 0xffe600 });
+            const bullet = new THREE.Mesh(bulletGeo, bulletMat);
+            const finalDir = dir.clone();
+            finalDir.x += (Math.random() - 0.5) * spread;
+            finalDir.y += (Math.random() - 0.5) * spread;
+            finalDir.z += (Math.random() - 0.5) * spread;
+            finalDir.normalize();
+
+            bullet.position.copy(origin.clone().addScaledVector(finalDir, 1.0));
+            bullet.userData = { dir: finalDir, life: 60 };
             scene.add(bullet);
             bullets.push(bullet);
-
-            // 击发增加警星几率
-            if (Math.random() < 0.15 && wantedLevel < 6) {
-                setWantedLevel(wantedLevel + 1);
-
-            missionTargetCount++;
-            const mb = document.getElementById('mission-banner');
-            if (missionTargetCount < 3) {
-                mb.innerText = "🎯 任务目标：清除 3 名黑帮暴徒 (" + missionTargetCount + "/3)";
-            } else {
-                mb.innerText = '🏆 任务完成！VICE CITY 赏金奖励 +,000！';
-                mb.style.borderColor = '#ffe600';
-                mb.style.color = '#ffe600';
-                playerMoney += 10000;
-                document.querySelector('.vc-money').innerText = '$' + playerMoney.toString().padStart(8, '0');
-            }
-
-            }
         }
 
         function setWantedLevel(stars) {
@@ -1176,25 +1439,35 @@
         }
 
         function toggleVehicle() {
-            const dist = player.position.distanceTo(car.position);
-            if (!inVehicle && dist < 5.0) {
-                inVehicle = true;
-                sfx.playDoorSlam();
-                document.getElementById("speedo-box").style.display = "block";
+            const distToCar = player.position.distanceTo(car.position);
+            const distToBoat = speedBoat ? player.position.distanceTo(speedBoat.position) : 999;
 
-                document.getElementById('radio-banner').style.display = 'block';
-                document.getElementById('radio-banner').innerText = '📻 ' + radioStations[currentRadioStation] + ' [R键切台]';
-                sfx.playSynthWaveBeat();
-                setTimeout(() => { document.getElementById('radio-banner').style.display = 'none'; }, 3000);
-
-                player.visible = false;
-                vehiclePrompt.style.display = 'none';
+            if (!inVehicle && !inBoat) {
+                if (distToCar < 5.0) {
+                    inVehicle = true;
+                    sfx.playDoorSlam();
+                    document.getElementById("speedo-box").style.display = "block";
+                    player.visible = false;
+                    vehiclePrompt.style.display = 'none';
+                } else if (distToBoat < 6.0) {
+                    inBoat = true;
+                    sfx.playDoorSlam();
+                    document.getElementById("speedo-box").style.display = "block";
+                    player.visible = false;
+                    vehiclePrompt.style.display = 'none';
+                }
             } else if (inVehicle) {
                 inVehicle = false;
                 sfx.playDoorSlam();
                 document.getElementById("speedo-box").style.display = "none";
                 player.visible = true;
                 player.position.set(car.position.x - 2.5, 0, car.position.z);
+            } else if (inBoat) {
+                inBoat = false;
+                sfx.playDoorSlam();
+                document.getElementById("speedo-box").style.display = "none";
+                player.visible = true;
+                player.position.set(speedBoat.position.x - 3.0, 0.4, speedBoat.position.z);
             }
         }
 
@@ -1238,9 +1511,18 @@
                     player.rotation.y = Math.atan2(moveDir.x, moveDir.z);
                 }
 
-                // 检测靠近车辆
+                // 检测靠近车辆或快艇
                 const distToCar = player.position.distanceTo(car.position);
-                vehiclePrompt.style.display = (distToCar < 5.0 ? 'block' : 'none');
+                const distToBoat = speedBoat ? player.position.distanceTo(speedBoat.position) : 999;
+                if (distToCar < 5.0) {
+                    vehiclePrompt.innerText = '按 [F] 或 [Enter] 驾驶豪华超跑 Infernus';
+                    vehiclePrompt.style.display = 'block';
+                } else if (distToBoat < 6.0) {
+                    vehiclePrompt.innerText = '按 [F] 或 [Enter] 驾驶迈阿密快艇 Squalo';
+                    vehiclePrompt.style.display = 'block';
+                } else {
+                    vehiclePrompt.style.display = 'none';
+                }
 
                 // 第三人称越肩视角
                 const camDist = 4.8;
@@ -1384,6 +1666,97 @@
                 if (Math.random() < 0.2) sfx.playTireSkid();
             }
 
+            
+            // RPG 火箭飞行与爆炸判定
+            for (let i = rockets.length - 1; i >= 0; i--) {
+                const r = rockets[i];
+                r.position.addScaledVector(r.userData.dir, 4.0);
+                r.userData.life--;
+
+                let hit = false;
+                if (r.position.y <= 0.1 || r.userData.life <= 0) hit = true;
+
+                // 碰撞检测交通车/警车
+                trafficCars.forEach(t => {
+                    if (r.position.distanceTo(t.position) < 3.0) hit = true;
+                });
+                policeCars.forEach(p => {
+                    if (r.position.distanceTo(p.position) < 3.0) hit = true;
+                });
+
+                if (hit) {
+                    triggerExplosion(r.position.clone());
+                    scene.remove(r);
+                    rockets.splice(i, 1);
+                }
+            }
+
+            // 爆炸粒子生命周期更新
+            for (let i = explosions.length - 1; i >= 0; i--) {
+                const exp = explosions[i];
+                exp.life--;
+                exp.fireMesh.scale.addScalar(0.15);
+                exp.fireMesh.material.opacity = exp.life / 40;
+                exp.particles.forEach(p => {
+                    p.mesh.position.add(p.vel);
+                    p.vel.y -= 0.04; // 重力
+                });
+                if (exp.life <= 0) {
+                    scene.remove(exp.fireMesh);
+                    exp.particles.forEach(p => scene.remove(p.mesh));
+                    explosions.splice(i, 1);
+                }
+            }
+
+            // 快艇 Squalo 水面物理与波浪浮力
+            if (speedBoat) {
+                waveTimer += 0.04;
+                const waveY = Math.sin(speedBoat.position.x * 0.05 + waveTimer) * 0.25;
+                speedBoat.position.y = 0.2 + waveY;
+                speedBoat.rotation.z = Math.sin(waveTimer * 0.8) * 0.05;
+
+                if (inBoat) {
+                    const bData = speedBoat.userData;
+                    if (keys['KeyW'] || keys['ArrowUp']) {
+                        bData.speed = Math.min(bData.maxSpeed, bData.speed + bData.accel);
+                        if (Math.random() < 0.2) sfx.playBoatEngine();
+                    }
+                    if (keys['KeyS'] || keys['ArrowDown']) bData.speed = Math.max(-bData.maxSpeed * 0.3, bData.speed - bData.accel);
+                    if (keys['KeyA'] || keys['ArrowLeft']) speedBoat.rotation.y += 0.025 * (bData.speed >= 0 ? 1 : -1);
+                    if (keys['KeyD'] || keys['ArrowRight']) speedBoat.rotation.y -= 0.025 * (bData.speed >= 0 ? 1 : -1);
+
+                    bData.speed *= bData.friction;
+                    speedBoat.translateZ(-bData.speed);
+
+                    const speedKts = Math.round(Math.abs(bData.speed) * 70);
+                    document.getElementById('speedo-val').innerText = speedKts;
+
+                    // 快艇跟随镜头
+                    const bOffset = new THREE.Vector3(0, 4.0, 8.5).applyAxisAngle(new THREE.Vector3(0, 1, 0), speedBoat.rotation.y);
+                    camera.position.lerp(speedBoat.position.clone().add(bOffset), 0.12);
+                    camera.lookAt(speedBoat.position.clone().add(new THREE.Vector3(0, 1.0, 0)));
+                }
+            }
+
+            // 警方直升机 Maverick 空中追踪与强光探照
+            if (policeHeli) {
+                if (wantedLevel >= 2) {
+                    policeHeli.visible = true;
+                    policeHeli.userData.rotor.rotation.y += 0.45; // 旋翼高速旋转
+                    if (Math.random() < 0.1) sfx.playHeliChop();
+
+                    const pTarget = (inVehicle ? car.position : (inBoat ? speedBoat.position : player.position));
+                    const desiredHeliPos = new THREE.Vector3(pTarget.x + 12, 32, pTarget.z + 18);
+                    policeHeli.position.lerp(desiredHeliPos, 0.02);
+                    policeHeli.lookAt(pTarget.x, policeHeli.position.y, pTarget.z);
+
+                    // 探照灯紧紧锁死主角位置
+                    heliSpotLight.target.position.copy(pTarget);
+                } else {
+                    policeHeli.visible = false;
+                }
+            }
+
             // 更新小地图雷达
             drawRadar();
         }
@@ -1433,6 +1806,26 @@
                 ctx.fillStyle = '#fffa65';
                 ctx.fillRect(tRelX - 2.5, tRelZ - 2.5, 5, 5);
             });
+
+            
+            // 绘制快艇 (青绿色三角)
+            if (speedBoat) {
+                const bRelX = (speedBoat.position.x - activePos.x) * 1.5;
+                const bRelZ = (speedBoat.position.z - activePos.z) * 1.5;
+                ctx.fillStyle = '#00ffcc';
+                ctx.fillRect(bRelX - 3, bRelZ - 3, 6, 6);
+            }
+
+            // 绘制直升机 (警用红白圆环)
+            if (policeHeli && policeHeli.visible) {
+                const hRelX = (policeHeli.position.x - activePos.x) * 1.5;
+                const hRelZ = (policeHeli.position.z - activePos.z) * 1.5;
+                ctx.strokeStyle = '#ff0033';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(hRelX, hRelZ, 5, 0, Math.PI * 2);
+                ctx.stroke();
+            }
 
             ctx.fillStyle = '#ff4193';
             ctx.fillRect(carRelX - 4, carRelZ - 4, 8, 8);
