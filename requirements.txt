@@ -1,6 +1,0 @@
-fastapi
-httpx
-uvicorn
-brotli
-python-multipart
-aiofiles

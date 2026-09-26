@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Grand Theft Auto: Vice City - Web 3D 纯网页重写版 (v0.2)</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0d0614;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #fff;
+        }
+        #webgl-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            z-index: 1;
+        }
+        /* VC 经典霓虹 HUD */
+        #hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .hud-top-right {
+            position: absolute;
+            top: 24px;
+            right: 28px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 10px;
+        }
+        .vc-money {
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            font-size: 38px;
+            color: #55c842;
+            text-shadow: 2px 2px 0 #1b4b12, 0 0 10px rgba(85,200,66,0.5);
+            letter-spacing: 2px;
+        }
+        .hud-stats-row {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .stat-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(18, 5, 29, 0.65);
+            border: 1px solid rgba(255, 65, 147, 0.4);
+            padding: 6px 14px;
+            border-radius: 6px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        .stat-icon {
+            font-size: 20px;
+        }
+        .stat-val {
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            font-size: 26px;
+            letter-spacing: 1px;
+        }
+        .stat-health .stat-val {
+            color: #ea3556;
+            text-shadow: 1px 1px 0 #570817;
+        }
+        .stat-armor .stat-val {
+            color: #d8c232;
+            text-shadow: 1px 1px 0 #4f470e;
+        }
+        .stat-weapon {
+            color: #2edbf0;
+            font-size: 22px;
+            font-weight: 900;
+            letter-spacing: 1px;
+            text-shadow: 0 0 8px rgba(46,219,240,0.6);
+        }
+        /* 经典雷达 MiniMap */
+        #radar-container {
+            position: absolute;
+            bottom: 24px;
+            left: 24px;
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            background: rgba(13, 6, 20, 0.85);
+            border: 3px solid #ff4193;
+            box-shadow: 0 0 15px rgba(255,65,147,0.6), inset 0 0 20px rgba(0,0,0,0.8);
+            overflow: hidden;
+        }
+        #radar-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        /* 车辆提示 / 交互面板 */
+        #vehicle-prompt {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 65, 147, 0.85);
+            color: #fff;
+            padding: 10px 24px;
+            border-radius: 20px;
+            font-size: 16px;
+            font-weight: bold;
+            box-shadow: 0 0 20px rgba(255,65,147,0.8);
+            display: none;
+            pointer-events: none;
+            letter-spacing: 1px;
+        }
+        /* 启动/引导界面 */
+        #overlay-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, #2e1045 0%, #0d0614 100%);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            cursor: pointer;
+        }
+        .vc-logo {
+            font-family: 'Brush Script MT', cursive, sans-serif;
+            font-size: 78px;
+            color: #ff4193;
+            text-shadow: 0 0 20px #ff4193, 3px 3px 0 #ffe600, 0 0 40px rgba(255,65,147,0.8);
+            margin-bottom: 8px;
+            line-height: 1;
+            font-style: italic;
+        }
+        .vc-subtitle {
+            font-size: 22px;
+            letter-spacing: 6px;
+            color: #2edbf0;
+            text-shadow: 0 0 10px #2edbf0;
+            margin-bottom: 30px;
+            font-weight: 800;
+        }
+        .start-btn {
+            background: linear-gradient(135deg, #ff4193 0%, #a212df 100%);
+            color: #fff;
+            font-size: 20px;
+            font-weight: bold;
+            padding: 14px 40px;
+            border-radius: 30px;
+            border: 2px solid #ffe600;
+            box-shadow: 0 0 25px rgba(255,65,147,0.7);
+            transition: all 0.2s ease;
+            letter-spacing: 2px;
+        }
+        .start-btn:hover {
+            transform: scale(1.06);
+            box-shadow: 0 0 35px rgba(255,65,147,1);
+        }
+        .instructions-card {
+            margin-top: 36px;
+            background: rgba(0,0,0,0.6);
+            border: 1px solid rgba(46,219,240,0.4);
+            border-radius: 12px;
+            padding: 16px 28px;
+            font-size: 14px;
+            line-height: 1.8;
+            color: #d1d5db;
+            max-width: 520px;
+        }
+        .instructions-card span {
+            color: #ffe600;
+            font-weight: bold;
+        }
+        /* 十字准星 */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 65, 147, 0.85);
+            border: 2px solid #fff;
+            box-shadow: 0 0 6px #ff4193;
+            pointer-events: none;
+            display: none;
+        }
+    </style>
+    <!-- Three.js 独立现代化纯网页 3D 渲染引擎 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <canvas id="webgl-canvas"></canvas>
+
+    <div id="hud">
+        <div class="hud-top-right">
+            <div class="vc-money">$00350000</div>
+            <div class="hud-stats-row">
+                <div class="stat-box stat-health">
+                    <span class="stat-icon">❤️</span>
+                    <span class="stat-val" id="val-health">100</span>
+                </div>
+                <div class="stat-box stat-armor">
+                    <span class="stat-icon">🛡️</span>
+                    <span class="stat-val" id="val-armor">100</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-weapon" id="val-weapon">UZI-9MM 30/150</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="radar-container">
+            <canvas id="radar-canvas" width="140" height="140"></canvas>
+        </div>
+
+        <div id="vehicle-prompt">按 [F] 或 [Enter] 驾驶豪华跑车 Infernus</div>
+        <div id="crosshair"></div>
+    </div>
+
+    <div id="overlay-screen">
+        <div class="vc-logo">Vice City</div>
+        <div class="vc-subtitle">HTML5 3D WEB HD EDITION</div>
+        <button class="start-btn" id="start-btn">点击进入罪恶都市 (START GAME)</button>
+        <div class="instructions-card">
+            <p>🕹️ <span>操作指南</span>：</p>
+            <p>【步行模式】 <span>W A S D</span> 移动 | <span>鼠标滑动</span> 旋转视角 | <span>空格</span> 跳跃 | <span>左键</span> 射击</p>
+            <p>【载具模式】 靠近跑车按 <span>F</span> 上车 / 下车 | <span>W / S</span> 油门与刹车 | <span>A / D</span> 转向</p>
+        </div>
+    </div>
+
+    <script>
+        // --- 核心 WebGL 3D 场景与引擎逻辑 (v0.2 重构版本) ---
+        const canvas = document.getElementById('webgl-canvas');
+        const overlay = document.getElementById('overlay-screen');
+        const startBtn = document.getElementById('start-btn');
+        const healthEl = document.getElementById('val-health');
+        const armorEl = document.getElementById('val-armor');
+        const vehiclePrompt = document.getElementById('vehicle-prompt');
+        const crosshair = document.getElementById('crosshair');
+
+        let scene, camera, renderer;
+        let player, car;
+        let inVehicle = false;
+        let keys = {};
+        let cameraAngle = { yaw: 0, pitch: 0.2 };
+        let isPointerLocked = false;
+
+        // 城市建筑与装饰列表
+        const cityBuildings = [];
+        const palmTrees = [];
+
+        function initScene() {
+            scene = new THREE.Scene();
+            // 罪恶都市经典迈阿密粉紫黄昏渐变天空雾效
+            scene.background = new THREE.Color(0x281236);
+            scene.fog = new THREE.FogExp2(0x281236, 0.007);
+
+            camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // 光照设计：迈阿密夕阳阳光 + 霓虹环境光
+            const ambientLight = new THREE.AmbientLight(0xffb7c5, 0.7);
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.DirectionalLight(0xffa040, 1.4);
+            sunLight.position.set(100, 120, 80);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 0.5;
+            sunLight.shadow.camera.far = 400;
+            const d = 100;
+            sunLight.shadow.camera.left = -d;
+            sunLight.shadow.camera.right = d;
+            sunLight.shadow.camera.top = d;
+            sunLight.shadow.camera.bottom = -d;
+            scene.add(sunLight);
+
+            // 地面与 Ocean Beach 宽阔沿海公路
+            createEnvironment();
+
+            // 生成经典主角 Tommy Vercetti
+            createPlayer();
+
+            // 生成经典超级跑车 Infernus (兰博基尼风格)
+            createVehicle();
+
+            // 监听窗口与输入
+            window.addEventListener('resize', onWindowResize);
+            setupInput();
+        }
+
+        function createEnvironment() {
+            // 宽广主路与人行道
+            const roadGeo = new THREE.PlaneGeometry(60, 600);
+            const roadMat = new THREE.MeshStandardMaterial({ color: 0x1f232a, roughness: 0.8 });
+            const road = new THREE.Mesh(roadGeo, roadMat);
+            road.rotation.x = -Math.PI / 2;
+            road.receiveShadow = true;
+            scene.add(road);
+
+            // 道路双黄线
+            const lineGeo = new THREE.PlaneGeometry(0.8, 600);
+            const lineMat = new THREE.MeshBasicMaterial({ color: 0xffd23f });
+            const roadLine = new THREE.Mesh(lineGeo, lineMat);
+            roadLine.rotation.x = -Math.PI / 2;
+            roadLine.position.y = 0.02;
+            scene.add(roadLine);
+
+            // 海滩与海水
+            const sandGeo = new THREE.PlaneGeometry(200, 600);
+            const sandMat = new THREE.MeshStandardMaterial({ color: 0xeedcb2, roughness: 0.9 });
+            const sand = new THREE.Mesh(sandGeo, sandMat);
+            sand.rotation.x = -Math.PI / 2;
+            sand.position.set(130, -0.05, 0);
+            sand.receiveShadow = true;
+            scene.add(sand);
+
+            const oceanGeo = new THREE.PlaneGeometry(400, 600);
+            const oceanMat = new THREE.MeshStandardMaterial({ color: 0x1177aa, roughness: 0.1, metalness: 0.8 });
+            const ocean = new THREE.Mesh(oceanGeo, oceanMat);
+            ocean.rotation.x = -Math.PI / 2;
+            ocean.position.set(430, -0.2, 0);
+            scene.add(ocean);
+
+            // 生成沿街 80 年代迈阿密装饰艺术风格 (Art Deco) 霓虹建筑
+            const buildingColors = [0xfc5c65, 0xf7b731, 0x45aaf2, 0x26de81, 0xa55eea, 0xfd9644];
+            for (let z = -250; z <= 250; z += 40) {
+                const height = 25 + Math.random() * 45;
+                const width = 28;
+                const depth = 28;
+                const color = buildingColors[Math.floor(Math.random() * buildingColors.length)];
+
+                const bGeo = new THREE.BoxGeometry(width, height, depth);
+                const bMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.6 });
+                const building = new THREE.Mesh(bGeo, bMat);
+                building.position.set(-50, height / 2, z);
+                building.castShadow = true;
+                building.receiveShadow = true;
+                scene.add(building);
+                cityBuildings.push(building);
+
+                // 建筑霓虹招牌装饰灯条
+                const neonGeo = new THREE.BoxGeometry(width + 0.4, 1.2, depth + 0.4);
+                const neonMat = new THREE.MeshBasicMaterial({ color: 0xff007f });
+                const neonStrip = new THREE.Mesh(neonGeo, neonMat);
+                neonStrip.position.set(-50, height * 0.7, z);
+                scene.add(neonStrip);
+
+                // 沿街椰子树 (Vice City 标志性 Palm Tree)
+                createPalmTree(32, z);
+                createPalmTree(-32, z);
+            }
+        }
+
+        function createPalmTree(x, z) {
+            const trunkGeo = new THREE.CylinderGeometry(0.5, 0.9, 14, 8);
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x6e4a2e, roughness: 0.9 });
+            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+            trunk.position.set(x, 7, z);
+            trunk.castShadow = true;
+            scene.add(trunk);
+
+            const leavesGroup = new THREE.Group();
+            leavesGroup.position.set(x, 14, z);
+            const leafGeo = new THREE.ConeGeometry(4, 2, 6);
+            const leafMat = new THREE.MeshStandardMaterial({ color: 0x208034, roughness: 0.7 });
+            const leaf = new THREE.Mesh(leafGeo, leafMat);
+            leavesGroup.add(leaf);
+            scene.add(leavesGroup);
+            palmTrees.push({ trunk, leavesGroup });
+        }
+
+        function createPlayer() {
+            // Tommy Vercetti 经典模型 (夏威夷蓝绿衬衫、牛仔裤)
+            player = new THREE.Group();
+
+            // 躯干 (夏威夷夏日短袖)
+            const torsoGeo = new THREE.BoxGeometry(1.0, 1.2, 0.6);
+            const torsoMat = new THREE.MeshStandardMaterial({ color: 0x1dd1a1 });
+            const torso = new THREE.Mesh(torsoGeo, torsoMat);
+            torso.position.y = 1.6;
+            torso.castShadow = true;
+            player.add(torso);
+
+            // 头部
+            const headGeo = new THREE.BoxGeometry(0.5, 0.6, 0.5);
+            const headMat = new THREE.MeshStandardMaterial({ color: 0xffdbac });
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.position.y = 2.5;
+            head.castShadow = true;
+            player.add(head);
+
+            // 经典黑发
+            const hairGeo = new THREE.BoxGeometry(0.54, 0.25, 0.54);
+            const hairMat = new THREE.MeshStandardMaterial({ color: 0x2c2c2c });
+            const hair = new THREE.Mesh(hairGeo, hairMat);
+            hair.position.y = 2.8;
+            player.add(hair);
+
+            // 蓝色牛仔裤双腿
+            const legGeo = new THREE.BoxGeometry(0.4, 1.0, 0.45);
+            const legMat = new THREE.MeshStandardMaterial({ color: 0x2e86de });
+            const leftLeg = new THREE.Mesh(legGeo, legMat);
+            leftLeg.position.set(-0.25, 0.5, 0);
+            leftLeg.castShadow = true;
+            player.add(leftLeg);
+
+            const rightLeg = new THREE.Mesh(legGeo, legMat);
+            rightLeg.position.set(0.25, 0.5, 0);
+            rightLeg.castShadow = true;
+            player.add(rightLeg);
+
+            player.position.set(0, 0, 15);
+            scene.add(player);
+        }
+
+        function createVehicle() {
+            // 经典超跑 Infernus (车身流线型与尾翼)
+            car = new THREE.Group();
+
+            // 主车身底盘 (纯正 Vice City 亮白/霓虹粉)
+            const bodyGeo = new THREE.BoxGeometry(2.4, 0.65, 4.8);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.8, roughness: 0.2 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 0.6;
+            body.castShadow = true;
+            car.add(body);
+
+            // 驾驶舱挡风玻璃
+            const cabinGeo = new THREE.BoxGeometry(1.8, 0.55, 2.2);
+            const cabinMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.1 });
+            const cabin = new THREE.Mesh(cabinGeo, cabinMat);
+            cabin.position.set(0, 1.15, -0.2);
+            cabin.castShadow = true;
+            car.add(cabin);
+
+            // 标志性跑车高尾翼
+            const spoilerGeo = new THREE.BoxGeometry(2.2, 0.1, 0.5);
+            const spoilerMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+            const spoiler = new THREE.Mesh(spoilerGeo, spoilerMat);
+            spoiler.position.set(0, 1.25, 2.2);
+            car.add(spoiler);
+
+            // 4个车轮
+            const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.35, 16);
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1e272e, roughness: 0.8 });
+            const wheelOffsets = [
+                [-1.25, 0.42, 1.5],
+                [1.25, 0.42, 1.5],
+                [-1.25, 0.42, -1.5],
+                [1.25, 0.42, -1.5]
+            ];
+            wheelOffsets.forEach(pos => {
+                const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+                wheel.rotation.z = Math.PI / 2;
+                wheel.position.set(...pos);
+                wheel.castShadow = true;
+                car.add(wheel);
+            });
+
+            // 车前大灯与霓虹尾灯
+            const tailLightGeo = new THREE.BoxGeometry(1.8, 0.15, 0.1);
+            const tailLightMat = new THREE.MeshBasicMaterial({ color: 0xff1020 });
+            const tailLight = new THREE.Mesh(tailLightGeo, tailLightMat);
+            tailLight.position.set(0, 0.7, 2.41);
+            car.add(tailLight);
+
+            car.position.set(8, 0, 10);
+            car.rotation.y = 0;
+            car.userData = { speed: 0, maxSpeed: 1.8, accel: 0.02, friction: 0.98, steer: 0 };
+            scene.add(car);
+        }
+
+        function setupInput() {
+            window.addEventListener('keydown', e => {
+                keys[e.code] = true;
+                if (e.code === 'KeyF' || e.code === 'Enter') {
+                    toggleVehicle();
+                }
+            });
+            window.addEventListener('keyup', e => {
+                keys[e.code] = false;
+            });
+
+            startBtn.addEventListener('click', () => {
+                overlay.style.display = 'none';
+                canvas.requestPointerLock();
+                crosshair.style.display = 'block';
+            });
+
+            document.addEventListener('pointerlockchange', () => {
+                isPointerLocked = (document.pointerLockElement === canvas);
+            });
+
+            window.addEventListener('mousemove', e => {
+                if (!isPointerLocked) return;
+                const sens = 0.0024;
+                cameraAngle.yaw -= e.movementX * sens;
+                cameraAngle.pitch -= e.movementY * sens;
+                cameraAngle.pitch = Math.max(-0.2, Math.min(0.8, cameraAngle.pitch));
+            });
+        }
+
+        function toggleVehicle() {
+            const dist = player.position.distanceTo(car.position);
+            if (!inVehicle && dist < 5.0) {
+                inVehicle = true;
+                player.visible = false;
+                vehiclePrompt.style.display = 'none';
+            } else if (inVehicle) {
+                inVehicle = false;
+                player.visible = true;
+                player.position.set(car.position.x - 2.5, 0, car.position.z);
+            }
+        }
+
+        function updateGame() {
+            // 载具物理与驾驶逻辑
+            const carData = car.userData;
+            if (inVehicle) {
+                if (keys['KeyW'] || keys['ArrowUp']) carData.speed = Math.min(carData.maxSpeed, carData.speed + carData.accel);
+                if (keys['KeyS'] || keys['ArrowDown']) carData.speed = Math.max(-carData.maxSpeed * 0.4, carData.speed - carData.accel);
+                if (keys['KeyA'] || keys['ArrowLeft']) car.rotation.y += 0.03 * (carData.speed >= 0 ? 1 : -1);
+                if (keys['KeyD'] || keys['ArrowRight']) car.rotation.y -= 0.03 * (carData.speed >= 0 ? 1 : -1);
+
+                carData.speed *= carData.friction;
+                car.translateZ(-carData.speed);
+
+                // 相机跟随跑车第三人称电影视角
+                const offset = new THREE.Vector3(0, 3.2, 7.5).applyAxisAngle(new THREE.Vector3(0, 1, 0), car.rotation.y);
+                camera.position.lerp(car.position.clone().add(offset), 0.12);
+                camera.lookAt(car.position.clone().add(new THREE.Vector3(0, 1.2, 0)));
+            } else {
+                // 步行移动与控制逻辑
+                const moveSpeed = (keys['ShiftLeft'] ? 0.32 : 0.16);
+                let moveDir = new THREE.Vector3(0, 0, 0);
+
+                if (keys['KeyW']) moveDir.z -= 1;
+                if (keys['KeyS']) moveDir.z += 1;
+                if (keys['KeyA']) moveDir.x -= 1;
+                if (keys['KeyD']) moveDir.x += 1;
+
+                if (moveDir.lengthSq() > 0) {
+                    moveDir.normalize();
+                    moveDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraAngle.yaw);
+                    player.position.addScaledVector(moveDir, moveSpeed);
+                    player.rotation.y = Math.atan2(moveDir.x, moveDir.z);
+                }
+
+                // 检测靠近车辆
+                const distToCar = player.position.distanceTo(car.position);
+                vehiclePrompt.style.display = (distToCar < 5.0 ? 'block' : 'none');
+
+                // 第三人称越肩视角
+                const camDist = 4.8;
+                camera.position.x = player.position.x + Math.sin(cameraAngle.yaw) * Math.cos(cameraAngle.pitch) * camDist;
+                camera.position.y = player.position.y + Math.sin(cameraAngle.pitch) * camDist + 2.0;
+                camera.position.z = player.position.z + Math.cos(cameraAngle.yaw) * Math.cos(cameraAngle.pitch) * camDist;
+                camera.lookAt(player.position.x, player.position.y + 1.8, player.position.z);
+            }
+
+            // 更新小地图雷达
+            drawRadar();
+        }
+
+        function drawRadar() {
+            const rCanvas = document.getElementById('radar-canvas');
+            const ctx = rCanvas.getContext('2d');
+            const w = rCanvas.width;
+            const h = rCanvas.height;
+            const cx = w / 2;
+            const cy = h / 2;
+
+            ctx.clearRect(0, 0, w, h);
+
+            // 背景网格与海域
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.save();
+            ctx.translate(cx, cy);
+
+            const activePos = inVehicle ? car.position : player.position;
+            const angle = inVehicle ? -car.rotation.y : -cameraAngle.yaw;
+            ctx.rotate(angle);
+
+            // 绘制主公路
+            ctx.fillStyle = '#334155';
+            ctx.fillRect(-20, -100, 40, 200);
+
+            // 绘制跑车坐标标记 (粉色方块)
+            const carRelX = (car.position.x - activePos.x) * 1.5;
+            const carRelZ = (car.position.z - activePos.z) * 1.5;
+            ctx.fillStyle = '#ff4193';
+            ctx.fillRect(carRelX - 4, carRelZ - 4, 8, 8);
+
+            ctx.restore();
+
+            // 中心主角指示箭头 (黄色三角形)
+            ctx.fillStyle = '#ffe600';
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - 8);
+            ctx.lineTo(cx - 6, cy + 6);
+            ctx.lineTo(cx + 6, cy + 6);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            updateGame();
+            renderer.render(scene, camera);
+        }
+
+        initScene();
+        animate();
+    </script>
+</body>
+</html>
