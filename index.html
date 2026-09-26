@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Grand Theft Auto: Vice City - Web 3D 纯网页重写版 (v0.4)</title>
+    <title>Grand Theft Auto: Vice City - Web 3D 纯网页重写版 (v0.5)</title>
     <style>
         * {
             box-sizing: border-box;
@@ -312,6 +312,23 @@
                 osc.stop(this.ctx.currentTime + 0.08);
             }
             
+            
+            playCashPickup() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                const now = this.ctx.currentTime;
+                osc.frequency.setValueAtTime(800, now);
+                osc.frequency.setValueAtTime(1200, now + 0.08);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(now + 0.2);
+            }
+
             playSiren() {
                 if (!this.ctx) return;
                 const osc = this.ctx.createOscillator();
@@ -408,6 +425,14 @@
             // 生成经典主角 Tommy Vercetti
             createPlayer();
 
+            // 生成沿街漫步的迈阿密市民 NPC
+            const pedColors = [0xe84118, 0x9c88ff, 0xfbc531, 0x4cd137, 0x487eb0, 0xe056fd];
+            for (let i = -180; i <= 180; i += 30) {
+                createPedestrian(18 + Math.random() * 8, i, pedColors[Math.floor(Math.random() * pedColors.length)]);
+                createPedestrian(-18 - Math.random() * 8, i, pedColors[Math.floor(Math.random() * pedColors.length)]);
+            }
+
+
             // 生成经典超级跑车 Infernus (兰博基尼风格)
             createVehicle();
             createPoliceCar(-8, -40);
@@ -497,6 +522,52 @@
             leavesGroup.add(leaf);
             scene.add(leavesGroup);
             palmTrees.push({ trunk, leavesGroup });
+        }
+
+        
+        const pedestrians = [];
+        const droppedCash = [];
+        let playerMoney = 350000;
+
+        function createPedestrian(x, z, shirtColor) {
+            const ped = new THREE.Group();
+
+            // 躯干
+            const torsoGeo = new THREE.BoxGeometry(0.9, 1.1, 0.5);
+            const torsoMat = new THREE.MeshStandardMaterial({ color: shirtColor });
+            const torso = new THREE.Mesh(torsoGeo, torsoMat);
+            torso.position.y = 1.5;
+            torso.castShadow = true;
+            ped.add(torso);
+
+            // 头部
+            const headGeo = new THREE.BoxGeometry(0.45, 0.55, 0.45);
+            const headMat = new THREE.MeshStandardMaterial({ color: 0xf5cd79 });
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.position.y = 2.35;
+            ped.add(head);
+
+            // 双腿
+            const legGeo = new THREE.BoxGeometry(0.35, 0.95, 0.4);
+            const legMat = new THREE.MeshStandardMaterial({ color: 0x303952 });
+            const leftLeg = new THREE.Mesh(legGeo, legMat);
+            leftLeg.position.set(-0.2, 0.47, 0);
+            ped.add(leftLeg);
+
+            const rightLeg = new THREE.Mesh(legGeo, legMat);
+            rightLeg.position.set(0.2, 0.47, 0);
+            ped.add(rightLeg);
+
+            ped.position.set(x, 0, z);
+            ped.userData = {
+                health: 40,
+                speed: 0.04 + Math.random() * 0.03,
+                walkTimer: Math.random() * 10,
+                isDead: false,
+                leftLeg, rightLeg
+            };
+            scene.add(ped);
+            pedestrians.push(ped);
         }
 
         function createPlayer() {
@@ -693,6 +764,23 @@
         }
 
         
+        
+        function killPedestrian(ped) {
+            ped.userData.isDead = true;
+            ped.rotation.x = -Math.PI / 2;
+            ped.position.y = 0.25;
+
+            // 掉落经典绿色旋转钞票
+            const cashGeo = new THREE.BoxGeometry(0.8, 0.1, 0.4);
+            const cashMat = new THREE.MeshBasicMaterial({ color: 0x55c842 });
+            const cashMesh = new THREE.Mesh(cashGeo, cashMat);
+            cashMesh.position.set(ped.position.x, 0.5, ped.position.z);
+            scene.add(cashMesh);
+            droppedCash.push(cashMesh);
+
+            setWantedLevel(wantedLevel + 1);
+        }
+
         function shootWeapon() {
             if (ammoCount <= 0) return;
             ammoCount--;
@@ -810,6 +898,15 @@
             for (let i = bullets.length - 1; i >= 0; i--) {
                 const b = bullets[i];
                 b.position.addScaledVector(b.userData.dir, 3.5);
+
+                // 击中 NPC
+                pedestrians.forEach(ped => {
+                    if (!ped.userData.isDead && b.position.distanceTo(ped.position.clone().add(new THREE.Vector3(0, 1.2, 0))) < 1.4) {
+                        b.userData.life = 0;
+                        killPedestrian(ped);
+                    }
+                });
+
                 b.userData.life--;
                 if (b.userData.life <= 0) {
                     scene.remove(b);
@@ -845,6 +942,39 @@
                     }
                 }
             });
+
+            
+            // 行人 NPC 巡逻与摆腿动画
+            pedestrians.forEach(ped => {
+                if (ped.userData.isDead) return;
+                ped.userData.walkTimer += 0.08;
+                ped.userData.leftLeg.rotation.x = Math.sin(ped.userData.walkTimer) * 0.6;
+                ped.userData.rightLeg.rotation.x = -Math.sin(ped.userData.walkTimer) * 0.6;
+                ped.translateZ(-ped.userData.speed);
+
+                // 巡逻折返
+                if (ped.position.z > 240) ped.rotation.y = 0;
+                else if (ped.position.z < -240) ped.rotation.y = Math.PI;
+
+                // 车辆碰撞碾压
+                if (inVehicle && car.userData.speed > 0.4 && ped.position.distanceTo(car.position) < 2.5) {
+                    killPedestrian(ped);
+                }
+            });
+
+            // 现金掉落拾取
+            for (let i = droppedCash.length - 1; i >= 0; i--) {
+                const cash = droppedCash[i];
+                cash.rotation.y += 0.05;
+                const dist = (inVehicle ? car.position : player.position).distanceTo(cash.position);
+                if (dist < 3.0) {
+                    playerMoney += 500;
+                    document.querySelector('.vc-money').innerText = '$' + playerMoney.toString().padStart(8, '0');
+                    sfx.playCashPickup();
+                    scene.remove(cash);
+                    droppedCash.splice(i, 1);
+                }
+            }
 
             // 更新小地图雷达
             drawRadar();
