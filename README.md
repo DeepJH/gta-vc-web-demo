@@ -91,6 +91,16 @@ python3 -m http.server 8080
 
 ---
 
+## ⚠️ 免责声明 (Disclaimer)
+
+本项目仅为前端 Web 技术与 WebGL 3D 渲染的**学习研究、技术交流与致敬实验性作品**：
+- 本项目不包含、不分发任何原版商业游戏的受版权保护专有资产（包括但不限于专有二进制文件、商业音频、专有 3D 模型与专有贴图）。
+- 场景内所有 3D 几何网格、着色材质、环境特效及 Web Audio 声音流均为代码程序化实时生成（Procedural Generation）。
+- “Grand Theft Auto: Vice City” 及相关名称与商业标识为 Rockstar Games / Take-Two Interactive 公司的注册商标。本项目与 Rockstar Games 无任何商业关联或官方从属关系。
+- 严禁将本项目用于任何未经授权的商业盈利活动。
+
+---
+
 ## 📄 开源许可
 
 本项目采用 [MIT License](LICENSE) 许可协议。
