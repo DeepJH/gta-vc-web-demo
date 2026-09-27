@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Grand Theft Auto: Vice City - Web 3D 终极豪华版 (v0.10 - 经典秘籍系统、犀牛主战坦克与WASTED电影特效)</title>
+    <title>Grand Theft Auto: Vice City - Web 3D (v0.11 - 迈阿密黄金海岸高保真地标重构与程序化真实贴图)</title>
     <style>
         * {
             box-sizing: border-box;
@@ -807,6 +807,122 @@
         const cityBuildings = [];
         const palmTrees = [];
 
+        
+        // ================= v0.11 程序化高保真贴图系统 =================
+        function createHawaiianTexture() {
+            const c = document.createElement('canvas');
+            c.width = 256; c.height = 256;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#17c095';
+            ctx.fillRect(0, 0, 256, 256);
+            
+            // 经典 Vice City 夏威夷热带叶片印花
+            ctx.fillStyle = '#0a7d5f';
+            for (let i = 0; i < 18; i++) {
+                const x = (i * 57) % 256;
+                const y = (i * 73) % 256;
+                ctx.beginPath();
+                ctx.ellipse(x, y, 16, 7, (i * 0.6), 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.ellipse(x + 10, y + 10, 12, 5, -(i * 0.6), 0, Math.PI * 2);
+                ctx.fill();
+            }
+            // 橙粉色热带扶桑花点缀
+            ctx.fillStyle = '#ff7675';
+            for (let i = 0; i < 12; i++) {
+                const x = (i * 83 + 20) % 256;
+                const y = (i * 61 + 30) % 256;
+                ctx.beginPath();
+                ctx.arc(x, y, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#ffeaa7';
+                ctx.beginPath();
+                ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#ff7675';
+            }
+            const tex = new THREE.CanvasTexture(c);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(2, 2);
+            return tex;
+        }
+
+        function createJeansTexture() {
+            const c = document.createElement('canvas');
+            c.width = 128; c.height = 128;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#22559c';
+            ctx.fillRect(0, 0, 128, 128);
+            ctx.fillStyle = '#2c6cb0';
+            for (let i = -128; i < 256; i += 4) {
+                ctx.fillRect(i, 0, 1.5, 128);
+            }
+            // 水洗粗糙感白杂质
+            ctx.fillStyle = 'rgba(255,255,255,0.08)';
+            for (let i = 0; i < 400; i++) {
+                ctx.fillRect(Math.random() * 128, Math.random() * 128, 1, 1);
+            }
+            const tex = new THREE.CanvasTexture(c);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(2, 4);
+            return tex;
+        }
+
+        function createAsphaltTexture() {
+            const c = document.createElement('canvas');
+            c.width = 256; c.height = 256;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#262930';
+            ctx.fillRect(0, 0, 256, 256);
+            for (let i = 0; i < 3000; i++) {
+                const shade = Math.floor(25 + Math.random() * 40);
+                ctx.fillStyle = 'rgb(' + shade + ',' + (shade + 2) + ',' + (shade + 4) + ')';
+                ctx.fillRect(Math.random() * 256, Math.random() * 256, 1.5, 1.5);
+            }
+            const tex = new THREE.CanvasTexture(c);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(4, 30);
+            return tex;
+        }
+
+        function createBuildingTexture(baseHex) {
+            const c = document.createElement('canvas');
+            c.width = 256; c.height = 512;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = baseHex;
+            ctx.fillRect(0, 0, 256, 512);
+
+            // 装饰线条 (Art Deco 经典白色/粉色横向线条)
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, 256, 16);
+            ctx.fillRect(0, 240, 256, 8);
+            ctx.fillRect(0, 480, 256, 12);
+
+            // 窗户发光与暗格相间 (Windows Grid)
+            const rows = 12;
+            const cols = 5;
+            for (let r = 0; r < rows; r++) {
+                for (let col = 0; col < cols; col++) {
+                    const wx = 18 + col * 46;
+                    const wy = 36 + r * 38;
+                    const lit = Math.random() > 0.45;
+                    ctx.fillStyle = '#111822';
+                    ctx.fillRect(wx - 2, wy - 2, 28, 22);
+                    ctx.fillStyle = lit ? '#ffeaa7' : '#1e272e';
+                    ctx.fillRect(wx, wy, 24, 18);
+                    if (lit) {
+                        ctx.fillStyle = 'rgba(255, 234, 167, 0.4)';
+                        ctx.fillRect(wx + 2, wy + 2, 20, 14);
+                    }
+                }
+            }
+            const tex = new THREE.CanvasTexture(c);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(1, 1);
+            return tex;
+        }
+
         function initScene() {
             scene = new THREE.Scene();
             // 罪恶都市经典迈阿密粉紫黄昏渐变天空雾效
@@ -865,6 +981,75 @@
                         createVehicle();
             createRhinoTank(8, -60);
             createDockAndBoat();
+
+            // 🌴 v0.11 标志性地标：Ocean View Hotel (罪恶都市经典大饭店)
+            const hotelGroup = new THREE.Group();
+            hotelGroup.position.set(-50, 0, 0); // 坐落在城市核心路段正中心
+            hotelGroup.rotation.y = Math.PI / 2; // 正对主干道迎宾大道
+            
+            // 饭店主楼 (Art Deco 经典浅粉色与圆角弧形线条)
+            const hBaseGeo = new THREE.BoxGeometry(36, 32, 34);
+            const hBaseMat = new THREE.MeshStandardMaterial({ color: 0xffb8c6, roughness: 0.6 });
+            const hBase = new THREE.Mesh(hBaseGeo, hBaseMat);
+            hBase.position.y = 16;
+            hBase.castShadow = true;
+            hBase.receiveShadow = true;
+            hotelGroup.add(hBase);
+
+            // 标志性顶楼露台与弧形遮阳顶棚
+            const roofGeo = new THREE.BoxGeometry(40, 2.5, 38);
+            const roofMat = new THREE.MeshStandardMaterial({ color: 0x00d2d3, roughness: 0.5 });
+            const roof = new THREE.Mesh(roofGeo, roofMat);
+            roof.position.y = 33.25;
+            hotelGroup.add(roof);
+
+            // 经典立体发光霓虹大招牌: OCEAN VIEW HOTEL
+            const signBackGeo = new THREE.BoxGeometry(26, 4.5, 1.2);
+            const signBackMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+            const signBack = new THREE.Mesh(signBackGeo, signBackMat);
+            signBack.position.set(0, 36.5, 18);
+            hotelGroup.add(signBack);
+
+            // 发光绿色文字面板
+            const signCanvas = document.createElement('canvas');
+            signCanvas.width = 512; signCanvas.height = 128;
+            const sCtx = signCanvas.getContext('2d');
+            sCtx.fillStyle = '#0a3d62';
+            sCtx.fillRect(0, 0, 512, 128);
+            sCtx.font = 'bold 54px Arial, sans-serif';
+            sCtx.fillStyle = '#2ed573';
+            sCtx.textAlign = 'center';
+            sCtx.textBaseline = 'middle';
+            sCtx.shadowColor = '#7bed9f';
+            sCtx.shadowBlur = 18;
+            sCtx.fillText('OCEAN VIEW', 256, 64);
+            const signTex = new THREE.CanvasTexture(signCanvas);
+            const signMat = new THREE.MeshBasicMaterial({ map: signTex, transparent: true, side: THREE.DoubleSide });
+            const signMesh = new THREE.Mesh(new THREE.PlaneGeometry(24, 4), signMat);
+            signMesh.position.set(0, 36.5, 18.65);
+            hotelGroup.add(signMesh);
+
+            // 招牌背部发光面
+            const signMeshBack = new THREE.Mesh(new THREE.PlaneGeometry(24, 4), signMat);
+            signMeshBack.position.set(0, 36.5, 17.35);
+            signMeshBack.rotation.y = Math.PI;
+            hotelGroup.add(signMeshBack);
+
+            // 饭店门口遮阳门廊与罗马立柱
+            const porchRoof = new THREE.Mesh(new THREE.BoxGeometry(22, 1.5, 8), new THREE.MeshStandardMaterial({ color: 0xff4757 }));
+            porchRoof.position.set(0, 6, 21);
+            hotelGroup.add(porchRoof);
+
+            [-8, 8].forEach(colX => {
+                const column = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 6, 12), new THREE.MeshStandardMaterial({ color: 0xf1f2f6 }));
+                column.position.set(colX, 3, 24);
+                column.castShadow = true;
+                hotelGroup.add(column);
+            });
+
+            scene.add(hotelGroup);
+            cityBuildings.push(hBase);
+
             createPoliceHelicopter();
             createPoliceCar(-8, -40);
             createPoliceCar(-8, 80);
@@ -884,7 +1069,8 @@
         function createEnvironment() {
             // 宽广主路与人行道
             const roadGeo = new THREE.PlaneGeometry(60, 600);
-            const roadMat = new THREE.MeshStandardMaterial({ color: 0x1f232a, roughness: 0.8 });
+            const asphaltTex = createAsphaltTexture();
+            const roadMat = new THREE.MeshStandardMaterial({ map: asphaltTex, roughness: 0.85, metalness: 0.1 });
             const road = new THREE.Mesh(roadGeo, roadMat);
             road.rotation.x = -Math.PI / 2;
             road.receiveShadow = true;
@@ -917,13 +1103,15 @@
             // 生成沿街 80 年代迈阿密装饰艺术风格 (Art Deco) 霓虹建筑
             const buildingColors = [0xfc5c65, 0xf7b731, 0x45aaf2, 0x26de81, 0xa55eea, 0xfd9644];
             for (let z = -250; z <= 250; z += 40) {
+                if (Math.abs(z) < 25) continue; // 给 Ocean View Hotel 留出中心地标专属位置
                 const height = 25 + Math.random() * 45;
                 const width = 28;
                 const depth = 28;
                 const color = buildingColors[Math.floor(Math.random() * buildingColors.length)];
 
                 const bGeo = new THREE.BoxGeometry(width, height, depth);
-                const bMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.6 });
+                const bTex = createBuildingTexture('#' + color.toString(16).padStart(6, '0'));
+                const bMat = new THREE.MeshStandardMaterial({ map: bTex, roughness: 0.7 });
                 const building = new THREE.Mesh(bGeo, bMat);
                 building.position.set(-50, height / 2, z);
                 building.castShadow = true;
@@ -1018,32 +1206,44 @@
             // Tommy Vercetti 经典模型 (夏威夷蓝绿衬衫、牛仔裤)
             player = new THREE.Group();
 
-            // 躯干 (夏威夷夏日短袖)
+            // 躯干 (夏威夷热带花纹衬衫)
+            const hawaiianTex = createHawaiianTexture();
             const torsoGeo = new THREE.BoxGeometry(1.0, 1.2, 0.6);
-            const torsoMat = new THREE.MeshStandardMaterial({ color: 0x1dd1a1 });
+            const torsoMat = new THREE.MeshStandardMaterial({ map: hawaiianTex, roughness: 0.7 });
             const torso = new THREE.Mesh(torsoGeo, torsoMat);
             torso.position.y = 1.6;
             torso.castShadow = true;
             player.add(torso);
 
+            // 领口深V内搭与金色项链 (Vice City 标志性 Tommy 金项链)
+            const necklace = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.03, 8, 16), new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.9, roughness: 0.2 }));
+            necklace.rotation.x = Math.PI / 2;
+            necklace.position.set(0, 2.15, 0.31);
+            player.add(necklace);
+
             // 头部
             const headGeo = new THREE.BoxGeometry(0.5, 0.6, 0.5);
-            const headMat = new THREE.MeshStandardMaterial({ color: 0xffdbac });
+            const headMat = new THREE.MeshStandardMaterial({ color: 0xffdbac, roughness: 0.8 });
             const head = new THREE.Mesh(headGeo, headMat);
             head.position.y = 2.5;
             head.castShadow = true;
             player.add(head);
 
-            // 经典黑发
-            const hairGeo = new THREE.BoxGeometry(0.54, 0.25, 0.54);
-            const hairMat = new THREE.MeshStandardMaterial({ color: 0x2c2c2c });
+            // 经典黑发与侧分发型细节
+            const hairGeo = new THREE.BoxGeometry(0.56, 0.26, 0.56);
+            const hairMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 });
             const hair = new THREE.Mesh(hairGeo, hairMat);
-            hair.position.y = 2.8;
+            hair.position.y = 2.82;
             player.add(hair);
 
-            // 蓝色牛仔裤双腿
+            // 真实水洗牛仔裤双腿与皮带细节
+            const jeansTex = createJeansTexture();
+            const belt = new THREE.Mesh(new THREE.BoxGeometry(1.04, 0.12, 0.64), new THREE.MeshStandardMaterial({ color: 0x3d2714 }));
+            belt.position.y = 1.02;
+            player.add(belt);
+
             const legGeo = new THREE.BoxGeometry(0.4, 1.0, 0.45);
-            const legMat = new THREE.MeshStandardMaterial({ color: 0x2e86de });
+            const legMat = new THREE.MeshStandardMaterial({ map: jeansTex, roughness: 0.8 });
             const leftLeg = new THREE.Mesh(legGeo, legMat);
             leftLeg.position.set(-0.25, 0.5, 0);
             leftLeg.castShadow = true;
@@ -1053,6 +1253,50 @@
             rightLeg.position.set(0.25, 0.5, 0);
             rightLeg.castShadow = true;
             player.add(rightLeg);
+
+            // 白色经典休闲板鞋 (White Sneakers with Rubber Sole)
+            const shoeGeo = new THREE.BoxGeometry(0.42, 0.22, 0.65);
+            const shoeMat = new THREE.MeshStandardMaterial({ color: 0xf5f6fa, roughness: 0.5 });
+            const leftShoe = new THREE.Mesh(shoeGeo, shoeMat);
+            leftShoe.position.set(-0.25, 0.11, 0.08);
+            leftShoe.castShadow = true;
+            player.add(leftShoe);
+
+            const rightShoe = new THREE.Mesh(shoeGeo, shoeMat);
+            rightShoe.position.set(0.25, 0.11, 0.08);
+            rightShoe.castShadow = true;
+            player.add(rightShoe);
+
+            // 手臂与夏威夷短袖袖口 (Rolled-up Short Sleeves & Skin Forearms)
+            const sleeveGeo = new THREE.BoxGeometry(0.32, 0.45, 0.38);
+            const armGeo = new THREE.BoxGeometry(0.28, 0.65, 0.32);
+            const skinMat = new THREE.MeshStandardMaterial({ color: 0xffdbac, roughness: 0.75 });
+
+            // 左臂
+            const leftArmGroup = new THREE.Group();
+            leftArmGroup.position.set(-0.68, 2.0, 0);
+            const leftSleeve = new THREE.Mesh(sleeveGeo, torsoMat);
+            leftSleeve.position.y = -0.2;
+            leftArmGroup.add(leftSleeve);
+            const leftArm = new THREE.Mesh(armGeo, skinMat);
+            leftArm.position.y = -0.65;
+            leftArm.castShadow = true;
+            leftArmGroup.add(leftArm);
+            player.add(leftArmGroup);
+
+            // 右臂
+            const rightArmGroup = new THREE.Group();
+            rightArmGroup.position.set(0.68, 2.0, 0);
+            const rightSleeve = new THREE.Mesh(sleeveGeo, torsoMat);
+            rightSleeve.position.y = -0.2;
+            rightArmGroup.add(rightSleeve);
+            const rightArm = new THREE.Mesh(armGeo, skinMat);
+            rightArm.position.y = -0.65;
+            rightArm.castShadow = true;
+            rightArmGroup.add(rightArm);
+            player.add(rightArmGroup);
+
+            
 
             player.position.set(0, 0, 15);
             scene.add(player);
