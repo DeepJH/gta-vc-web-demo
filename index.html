@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Grand Theft Auto: Vice City - Web 3D 纯网页重写版 (v0.9 - 爆炸破坏系统、海洋快艇物理与空中警力直升机)</title>
+    <title>Grand Theft Auto: Vice City - Web 3D 终极豪华版 (v0.10 - 经典秘籍系统、犀牛主战坦克与WASTED电影特效)</title>
     <style>
         * {
             box-sizing: border-box;
@@ -51,6 +51,69 @@
             pointer-events: none;
             z-index: 6;
             display: none;
+        }
+
+        
+        /* v0.10 经典秘籍激活提示 (Cheat Activated) */
+        #cheat-banner {
+            position: absolute;
+            top: 24%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            font-size: 36px;
+            color: #55c842;
+            text-shadow: 2px 2px 0 #0f3d09, 0 0 16px rgba(85,200,66,0.9);
+            letter-spacing: 3px;
+            display: none;
+            z-index: 60;
+            pointer-events: none;
+            animation: cheatPop 2.2s forwards ease-out;
+        }
+        @keyframes cheatPop {
+            0% { opacity: 0; transform: translate(-50%, -70%) scale(0.8); }
+            15% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+            25% { transform: translate(-50%, -50%) scale(1.0); }
+            80% { opacity: 1; transform: translate(-50%, -50%); }
+            100% { opacity: 0; transform: translate(-50%, -30%); }
+        }
+
+        /* v0.10 经典 WASTED 死亡电影级红色遮罩 */
+        #wasted-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(140, 0, 0, 0.45) 0%, rgba(30, 0, 0, 0.85) 100%);
+            backdrop-filter: grayscale(70%) blur(4px);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            pointer-events: none;
+        }
+        .wasted-text {
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            font-size: 96px;
+            color: #ea3556;
+            text-shadow: 4px 4px 0 #570817, 0 0 40px rgba(234,53,86,0.95);
+            letter-spacing: 10px;
+            font-style: italic;
+            animation: wastedFadeIn 1.5s ease-out;
+        }
+        .wasted-sub {
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 18px;
+            color: #ff9999;
+            letter-spacing: 2px;
+            margin-top: 10px;
+            text-shadow: 0 0 10px #000;
+        }
+        @keyframes wastedFadeIn {
+            0% { opacity: 0; transform: scale(1.6); filter: blur(12px); }
+            100% { opacity: 1; transform: scale(1.0); filter: blur(0); }
         }
 
         /* VC 经典霓虹 HUD */
@@ -283,6 +346,12 @@
         <div id="mission-banner" style="position: absolute; top: 80px; left: 50%; transform: translateX(-50%); background: rgba(18,5,29,0.85); border: 1px solid #2edbf0; padding: 8px 20px; border-radius: 8px; font-size: 14px; color: #2edbf0; font-weight: bold; letter-spacing: 1px; text-shadow: 0 0 8px rgba(46,219,240,0.6);">
             🎯 任务目标：清除 3 名黑帮暴徒 (0/3) 或 甩开警方通缉
         </div>
+        
+        <div id="cheat-banner">CHEAT ACTIVATED!</div>
+        <div id="wasted-screen">
+            <div class="wasted-text">WASTED</div>
+            <div class="wasted-sub">即将就近在 OCEAN BEACH 医院满血重生...</div>
+        </div>
         <div id="radar-container">
             <canvas id="radar-canvas" width="140" height="140"></canvas>
         </div>
@@ -296,11 +365,12 @@
         <div class="vc-subtitle">HTML5 3D WEB HD EDITION</div>
         <button class="start-btn" id="start-btn">点击进入罪恶都市 (START GAME)</button>
         <div class="instructions-card">
-            <p>🕹️ <span>操作指南</span>：</p>
-            <p>【步行模式】 <span>W A S D</span> 移动 | <span>Q / E</span> 轮换武器 (拳头/微冲/散弹枪) | <span>鼠标滑动</span> 旋转视角 | <span>空格</span> 跳跃 | <span>左键</span> 射击</p>
-            <p>【气象控制】 随时按 <span>T</span> 切换迈阿密暴风雨天气与雷暴
-            </p><p>
-            【载具模式】 靠近跑车按 <span>F</span> 上车 / 下车 | <span>W / S</span> 油门与刹车 | <span>A / D</span> 转向</p>
+            <p>🕹️ <span>v0.10 终极操作指南</span>：</p>
+            <p>【步行模式】 <span>W A S D</span> 移动 | <span>Q / E</span> 轮换武器 | <span>鼠标滑动</span> 旋转视角 | <span>空格</span> 跳跃 | <span>左键</span> 射击</p>
+            <p>【载具系统】 靠近超跑/快艇/坦克按 <span>F</span> 驾驶 | <span>W / S</span> 油门与刹车 | <span>A / D</span> 转向</p>
+            <p>【主战坦克】 驾驶 Rhino 坦克鼠标 <span>左键</span> 发射 120mm 重型高爆炮弹，可碾压一切车辆！</p>
+            <p>【经典秘籍】 游戏内键盘直接输入：<span>ASPIRINE</span>(补满血) / <span>PANZER</span>(召唤坦克) / <span>PRECIOUSPROTECTION</span>(满护甲) / <span>NUTTERTOOLS</span>(重武器) / <span>LEAVEMEALONE</span>(消通缉)</p>
+            <p>【环境控制】 按 <span>T</span> 切换迈阿密暴风雨与雷暴天气</p>
         </div>
     </div>
 
@@ -536,6 +606,43 @@
 
             
             // RPG 火箭发射与爆炸音效
+            
+            // 犀牛主战坦克 120mm 重穿甲主炮开火音效 (Tank Cannon Blast)
+            playTankCannon() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(110, now);
+                osc.frequency.exponentialRampToValueAtTime(20, now + 0.6);
+                gain.gain.setValueAtTime(2.0, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.6);
+                this.playExplosion();
+            }
+
+            // 秘籍输入激活经典清脆琶音铃声 (Cheat SFX)
+            playCheatSound() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                [523.25, 659.25, 783.99, 1046.50].forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+                    gain.gain.setValueAtTime(0.28, now + idx * 0.08);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + (idx + 1) * 0.08);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + idx * 0.08);
+                    osc.stop(now + (idx + 1) * 0.08);
+                });
+            }
+
             playRocketLaunch() {
                 if (!this.ctx) return;
                 const now = this.ctx.currentTime;
@@ -621,6 +728,14 @@
         const sfx = new VCAudioEngine();
         let wantedLevel = 0;
         
+        
+        // --- v0.10 犀牛坦克、秘籍输入、相机晃动与死亡重生系统 ---
+        let tankRhino = null;
+        let inTank = false;
+        let cheatBuffer = "";
+        let isDead = false;
+        let camTrauma = 0; // 0..1 动态震动创伤值
+
         // --- 多武器状态机 (Q/E 轮换) ---
         const weaponList = [
             { id: 'fist', name: 'FIST (拳头)', ammo: Infinity, maxAmmo: Infinity, range: 2.8, spread: 0 },
@@ -706,6 +821,11 @@
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
+            // v0.10 启用各向异性过滤 (Anisotropic Filtering)
+            const maxAniso = renderer.capabilities.getMaxAnisotropy();
+            renderer.capabilities.defaultAnisotropy = maxAniso;
+
+
             // 光照设计：迈阿密夕阳阳光 + 霓虹环境光
             const ambientLight = new THREE.AmbientLight(0xffb7c5, 0.7);
             ambientLightRef = ambientLight;
@@ -743,6 +863,7 @@
 
             // 生成经典超级跑车 Infernus (兰博基尼风格)
                         createVehicle();
+            createRhinoTank(8, -60);
             createDockAndBoat();
             createPoliceHelicopter();
             createPoliceCar(-8, -40);
@@ -1164,6 +1285,7 @@
             }
 
             explosions.push({ fireMesh, particles, life: 40 });
+            camTrauma = Math.min(1.0, camTrauma + (radius > 12 ? 0.85 : 0.45));
 
             // 范围破坏：击倒行人、引爆/炸飞附近车辆
             pedestrians.forEach(ped => {
@@ -1185,6 +1307,104 @@
                 let curHealth = parseInt(healthEl.innerText);
                 healthEl.innerText = Math.max(0, curHealth - 35);
             }
+        }
+
+        
+        // --- v0.10 传奇陆战之王犀牛坦克 Rhino 实体生成 ---
+        function createRhinoTank(x, z) {
+            if (tankRhino) {
+                tankRhino.position.set(x, 0, z);
+                tankRhino.userData.speed = 0;
+                return;
+            }
+            tankRhino = new THREE.Group();
+
+            // 坦克重装装甲底盘 (军绿硬质合金装甲)
+            const hullGeo = new THREE.BoxGeometry(4.4, 1.4, 7.2);
+            const hullMat = new THREE.MeshStandardMaterial({ color: 0x3d4f29, roughness: 0.75, metalness: 0.35 });
+            const hull = new THREE.Mesh(hullGeo, hullMat);
+            hull.position.y = 1.0;
+            hull.castShadow = true;
+            hull.receiveShadow = true;
+            tankRhino.add(hull);
+
+            // 前部倾斜滑跃首上装甲板 (Sloped Armor)
+            const frontGeo = new THREE.BoxGeometry(4.4, 0.9, 1.6);
+            const frontPlate = new THREE.Mesh(frontGeo, hullMat);
+            frontPlate.position.set(0, 0.9, -3.8);
+            frontPlate.rotation.x = -Math.PI / 6;
+            frontPlate.castShadow = true;
+            tankRhino.add(frontPlate);
+
+            // 左右双侧重型履带箱 (Heavy Duty Steel Tracks)
+            const trackMat = new THREE.MeshStandardMaterial({ color: 0x181818, roughness: 0.95 });
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x2e3b20, roughness: 0.8, metalness: 0.5 });
+            
+            [-2.4, 2.4].forEach(sideX => {
+                const trackHousing = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.15, 7.6), trackMat);
+                trackHousing.position.set(sideX, 0.7, 0);
+                trackHousing.castShadow = true;
+                tankRhino.add(trackHousing);
+
+                // 侧裙挂载实心负重轮
+                for (let wz = -3.2; wz <= 3.2; wz += 1.3) {
+                    const roadWheel = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.48, 0.92, 12), wheelMat);
+                    roadWheel.rotation.z = Math.PI / 2;
+                    roadWheel.position.set(sideX, 0.48, wz);
+                    roadWheel.castShadow = true;
+                    tankRhino.add(roadWheel);
+                }
+            });
+
+            // 360 度独立全向旋转炮塔 (Rotatable Turret)
+            const turretGeo = new THREE.BoxGeometry(3.2, 1.1, 3.6);
+            const turretMat = new THREE.MeshStandardMaterial({ color: 0x334420, roughness: 0.7, metalness: 0.4 });
+            const turret = new THREE.Mesh(turretGeo, turretMat);
+            turret.position.set(0, 2.15, 0.2);
+            turret.castShadow = true;
+            turret.receiveShadow = true;
+            tankRhino.add(turret);
+            tankRhino.userData.turret = turret;
+
+            // 车长指挥塔舱盖
+            const cupola = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.35, 12), turretMat);
+            cupola.position.set(0.8, 0.65, 0.4);
+            turret.add(cupola);
+
+            // 120mm 重型滑膛主炮管 (Main Gun Barrel)
+            const barrelGeo = new THREE.CylinderGeometry(0.24, 0.28, 5.2, 14);
+            const barrelMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1c, metalness: 0.85, roughness: 0.3 });
+            const barrel = new THREE.Mesh(barrelGeo, barrelMat);
+            barrel.rotation.x = -Math.PI / 2;
+            barrel.position.set(0, 0.05, -3.2);
+            barrel.castShadow = true;
+            turret.add(barrel);
+
+            // 炮口制退器 (Muzzle Brake)
+            const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.6, 12), barrelMat);
+            muzzle.rotation.x = -Math.PI / 2;
+            muzzle.position.set(0, 0.05, -5.9);
+            turret.add(muzzle);
+
+            tankRhino.position.set(x, 0, z);
+            tankRhino.userData = {
+                speed: 0,
+                maxSpeed: 1.1,
+                accel: 0.018,
+                friction: 0.95,
+                fireCooldown: 0
+            };
+
+            scene.add(tankRhino);
+        }
+
+        // 秘籍系统触发器
+        function triggerCheat(name, desc) {
+            sfx.playCheatSound();
+            const banner = document.getElementById('cheat-banner');
+            banner.innerText = `CHEAT: ${name} (${desc})`;
+            banner.style.display = 'block';
+            setTimeout(() => { banner.style.display = 'none'; }, 2200);
         }
 
         function createVehicle() {
@@ -1247,13 +1467,50 @@
         function setupInput() {
 
             window.addEventListener('mousedown', (e) => {
-                if (e.button === 0 && isPointerLocked && !inVehicle) {
-                    shootWeapon();
+                if (e.button === 0 && isPointerLocked) {
+                    if (inTank && tankRhino && tankRhino.userData.fireCooldown === 0) {
+                        tankRhino.userData.fireCooldown = 35; // 射击冷却
+                        sfx.playTankCannon();
+                        camTrauma = 0.75;
+                        const fireDir = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), tankRhino.rotation.y + tankRhino.userData.turret.rotation.y);
+                        const cannonMuzzlePos = tankRhino.position.clone().add(new THREE.Vector3(0, 2.2, 0)).addScaledVector(fireDir, 6.2);
+                        // 主炮高爆炮弹穿透爆炸
+                        triggerExplosion(cannonMuzzlePos.clone().addScaledVector(fireDir, 16.0), 16.0);
+                    } else if (!inVehicle && !inBoat && !inTank) {
+                        shootWeapon();
+                    }
                 }
             });
 
             window.addEventListener('keydown', e => {
                 keys[e.code] = true;
+
+                // 经典 VC 键盘秘籍监听
+                if (e.key && e.key.length === 1) {
+                    cheatBuffer += e.key.toUpperCase();
+                    if (cheatBuffer.length > 25) cheatBuffer = cheatBuffer.slice(-25);
+
+                    if (cheatBuffer.endsWith('ASPIRINE')) {
+                        healthEl.innerText = '100';
+                        triggerCheat('ASPIRINE', '生命值满格恢复');
+                    } else if (cheatBuffer.endsWith('PRECIOUSPROTECTION')) {
+                        armorEl.innerText = '100';
+                        triggerCheat('PRECIOUSPROTECTION', '防弹护甲满格');
+                    } else if (cheatBuffer.endsWith('PANZER')) {
+                        const targetPos = (inVehicle ? car.position : (inBoat ? speedBoat.position : (inTank ? tankRhino.position : player.position)));
+                        const spawnPos = targetPos.clone().add(new THREE.Vector3(0, 0, 12));
+                        createRhinoTank(spawnPos.x, spawnPos.z);
+                        triggerCheat('PANZER', '召唤犀牛主战坦克');
+                    } else if (cheatBuffer.endsWith('NUTTERTOOLS') || cheatBuffer.endsWith('THUGSTOOLS')) {
+                        weaponList.forEach(w => { if (w.ammo !== Infinity) w.ammo = w.maxAmmo * 3; });
+                        updateWeaponHUD();
+                        triggerCheat('NUTTERTOOLS', '重装武器弹药包');
+                    } else if (cheatBuffer.endsWith('LEAVEMEALONE')) {
+                        setWantedLevel(0);
+                        triggerCheat('LEAVEMEALONE', '清除通缉星级');
+                    }
+                }
+
 
                 // Q / E 轮换武器
                 if (e.code === 'KeyQ') {
@@ -1441,9 +1698,16 @@
         function toggleVehicle() {
             const distToCar = player.position.distanceTo(car.position);
             const distToBoat = speedBoat ? player.position.distanceTo(speedBoat.position) : 999;
+            const distToTank = tankRhino ? player.position.distanceTo(tankRhino.position) : 999;
 
-            if (!inVehicle && !inBoat) {
-                if (distToCar < 5.0) {
+            if (!inVehicle && !inBoat && !inTank) {
+                if (distToTank < 6.5) {
+                    inTank = true;
+                    sfx.playDoorSlam();
+                    document.getElementById("speedo-box").style.display = "block";
+                    player.visible = false;
+                    vehiclePrompt.style.display = 'none';
+                } else if (distToCar < 5.0) {
                     inVehicle = true;
                     sfx.playDoorSlam();
                     document.getElementById("speedo-box").style.display = "block";
@@ -1456,6 +1720,12 @@
                     player.visible = false;
                     vehiclePrompt.style.display = 'none';
                 }
+            } else if (inTank) {
+                inTank = false;
+                sfx.playDoorSlam();
+                document.getElementById("speedo-box").style.display = "none";
+                player.visible = true;
+                player.position.set(tankRhino.position.x - 3.5, 0, tankRhino.position.z);
             } else if (inVehicle) {
                 inVehicle = false;
                 sfx.playDoorSlam();
@@ -1511,10 +1781,14 @@
                     player.rotation.y = Math.atan2(moveDir.x, moveDir.z);
                 }
 
-                // 检测靠近车辆或快艇
+                // 检测靠近车辆、快艇或主战坦克
                 const distToCar = player.position.distanceTo(car.position);
                 const distToBoat = speedBoat ? player.position.distanceTo(speedBoat.position) : 999;
-                if (distToCar < 5.0) {
+                const distToTank = tankRhino ? player.position.distanceTo(tankRhino.position) : 999;
+                if (distToTank < 6.5) {
+                    vehiclePrompt.innerText = '按 [F] 或 [Enter] 驾驶犀牛主战坦克 Rhino (左键炮击)';
+                    vehiclePrompt.style.display = 'block';
+                } else if (distToCar < 5.0) {
                     vehiclePrompt.innerText = '按 [F] 或 [Enter] 驾驶豪华超跑 Infernus';
                     vehiclePrompt.style.display = 'block';
                 } else if (distToBoat < 6.0) {
@@ -1757,6 +2031,72 @@
                 }
             }
 
+            
+            // 犀牛坦克 Rhino 物理运动与碾压判定
+            if (tankRhino) {
+                if (inTank) {
+                    const tData = tankRhino.userData;
+                    if (keys['KeyW'] || keys['ArrowUp']) tData.speed = Math.min(tData.maxSpeed, tData.speed + tData.accel);
+                    if (keys['KeyS'] || keys['ArrowDown']) tData.speed = Math.max(-tData.maxSpeed * 0.4, tData.speed - tData.accel);
+                    if (keys['KeyA'] || keys['ArrowLeft']) tankRhino.rotation.y += 0.025 * (tData.speed >= 0 ? 1 : -1);
+                    if (keys['KeyD'] || keys['ArrowRight']) tankRhino.rotation.y -= 0.025 * (tData.speed >= 0 ? 1 : -1);
+
+                    tData.speed *= tData.friction;
+                    tankRhino.translateZ(-tData.speed);
+
+                    const speedMph = Math.round(Math.abs(tData.speed) * 45);
+                    document.getElementById('speedo-val').innerText = speedMph;
+
+                    // 坦克跟随第三人称视角
+                    const tOffset = new THREE.Vector3(0, 4.8, 11.0).applyAxisAngle(new THREE.Vector3(0, 1, 0), tankRhino.rotation.y);
+                    camera.position.lerp(tankRhino.position.clone().add(tOffset), 0.12);
+                    camera.lookAt(tankRhino.position.clone().add(new THREE.Vector3(0, 2.0, 0)));
+
+                    // 炮塔独立平滑对准十字准星瞄准方向
+                    if (tData.turret) {
+                        const targetTurretYaw = cameraAngle.yaw - tankRhino.rotation.y;
+                        tData.turret.rotation.y = targetTurretYaw;
+                    }
+
+                    // 坦克毁灭性碾压撞毁交通车辆与警车
+                    trafficCars.forEach(tc => {
+                        if (tankRhino.position.distanceTo(tc.position) < 4.2) {
+                            triggerExplosion(tc.position.clone(), 9.0);
+                        }
+                    });
+                    policeCars.forEach(pc => {
+                        if (tankRhino.position.distanceTo(pc.position) < 4.2) {
+                            triggerExplosion(pc.position.clone(), 9.0);
+                        }
+                    });
+
+                    // 坦克碾压行人
+                    pedestrians.forEach(ped => {
+                        if (!ped.userData.isDead && tankRhino.position.distanceTo(ped.position) < 3.2) {
+                            killPedestrian(ped);
+                        }
+                    });
+
+                    tData.fireCooldown = Math.max(0, tData.fireCooldown - 1);
+                }
+            }
+
+            // 死亡 WASTED 电影级红字大招牌与重生判定
+            if (!isDead && parseInt(healthEl.innerText) <= 0) {
+                isDead = true;
+                camTrauma = 1.0;
+                document.getElementById('wasted-screen').style.display = 'flex';
+                setTimeout(() => {
+                    // 医院满血重生
+                    healthEl.innerText = '100';
+                    armorEl.innerText = '100';
+                    player.position.set(0, 0, 15);
+                    if (inVehicle || inBoat || inTank) toggleVehicle();
+                    document.getElementById('wasted-screen').style.display = 'none';
+                    isDead = false;
+                }, 3500);
+            }
+
             // 更新小地图雷达
             drawRadar();
         }
@@ -1827,6 +2167,15 @@
                 ctx.stroke();
             }
 
+            
+            // 绘制坦克 Rhino (深军绿方块)
+            if (tankRhino) {
+                const tkRelX = (tankRhino.position.x - activePos.x) * 1.5;
+                const tkRelZ = (tankRhino.position.z - activePos.z) * 1.5;
+                ctx.fillStyle = '#2d6a4f';
+                ctx.fillRect(tkRelX - 5, tkRelZ - 5, 10, 10);
+            }
+
             ctx.fillStyle = '#ff4193';
             ctx.fillRect(carRelX - 4, carRelZ - 4, 8, 8);
 
@@ -1851,6 +2200,16 @@
         function animate() {
             requestAnimationFrame(animate);
             updateGame();
+
+            // 动态相机晃动 (Dynamic Screen Shake)
+            if (camTrauma > 0) {
+                camTrauma = Math.max(0, camTrauma - 0.025);
+                const shake = camTrauma * camTrauma;
+                camera.position.x += (Math.random() - 0.5) * shake * 0.9;
+                camera.position.y += (Math.random() - 0.5) * shake * 0.9;
+                camera.position.z += (Math.random() - 0.5) * shake * 0.9;
+            }
+
             renderer.render(scene, camera);
         }
 
