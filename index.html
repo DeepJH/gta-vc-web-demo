@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Grand Theft Auto: Vice City - Web 3D (v0.13 - Kaufman Cabs 考夫曼出租车营运与计程接送系统)</title>
+    <title>Grand Theft Auto: Vice City - Web 3D (v0.14 - Ammu-Nation 军火商行、火焰喷射器与高精狙击系统)</title>
     <style>
         * {
             box-sizing: border-box;
@@ -56,6 +56,79 @@
         
         
         
+        
+        /* v0.14 PSG-1 经典狙击枪开镜光学瞄准镜 */
+        #sniper-scope {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle closest-side, transparent 46%, rgba(0, 0, 0, 0.96) 50%, #000 100%);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+            z-index: 65;
+        }
+        .sniper-crosshair {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: rgba(0, 255, 128, 0.7);
+            box-shadow: 0 0 6px rgba(0, 255, 128, 0.9);
+        }
+        .sniper-crosshair-v {
+            position: absolute;
+            height: 100%;
+            width: 2px;
+            background: rgba(0, 255, 128, 0.7);
+            box-shadow: 0 0 6px rgba(0, 255, 128, 0.9);
+        }
+        .sniper-circle {
+            position: absolute;
+            width: 320px;
+            height: 320px;
+            border: 2px solid rgba(0, 255, 128, 0.6);
+            border-radius: 50%;
+            box-shadow: inset 0 0 15px rgba(0, 255, 128, 0.3);
+        }
+        .sniper-info {
+            position: absolute;
+            bottom: 18%;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            color: #00ff80;
+            letter-spacing: 2px;
+            text-shadow: 0 0 6px #00ff80;
+        }
+
+        /* Ammu-Nation 军火补给横幅 */
+        #ammu-banner {
+            position: absolute;
+            top: 28%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            font-size: 34px;
+            color: #ff3838;
+            text-shadow: 3px 3px 0 #570817, 0 0 20px rgba(255, 56, 56, 0.9);
+            letter-spacing: 3px;
+            display: none;
+            z-index: 70;
+            pointer-events: none;
+            text-align: center;
+            white-space: nowrap;
+            animation: ammuPulse 2.4s forwards ease-out;
+        }
+        @keyframes ammuPulse {
+            0% { opacity: 0; transform: translate(-50%, -70%) scale(0.8); }
+            15% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+            25% { transform: translate(-50%, -50%) scale(1.0); }
+            80% { opacity: 1; transform: translate(-50%, -50%); }
+            100% { opacity: 0; transform: translate(-50%, -30%); }
+        }
+
         /* v0.13 Kaufman Cabs 出租车计价 HUD 与乘客结算 */
         #taxi-hud {
             position: absolute;
@@ -462,6 +535,16 @@
         <div id="cheat-banner">CHEAT ACTIVATED!</div>
 
         
+    
+    <!-- v0.14 经典高精度狙击瞄准镜与军火补给横幅 -->
+    <div id="sniper-scope">
+        <div class="sniper-crosshair"></div>
+        <div class="sniper-crosshair-v"></div>
+        <div class="sniper-circle"></div>
+        <div class="sniper-info">PSG-1 HIGH MAGNIFICATION OPTIC | ZOOM: 8.0X</div>
+    </div>
+    <div id="ammu-banner">AMMU-NATION: 全套重武器弹药与防弹衣已补满! (-$500)</div>
+
     <!-- v0.13 Kaufman Cabs 出租车计价器与结算横幅 -->
     <div id="taxi-hud">
         <div class="taxi-hud-title">🚕 KAUFMAN CABS</div>
@@ -865,6 +948,79 @@
             }
 
             
+            
+            // 🔥 v0.14 火焰喷射器、PSG-1 狙击步枪与枪械上膛音效
+            playFlamethrower() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const bufferSize = Math.floor(this.ctx.sampleRate * 0.15);
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * 0.7;
+                }
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(650, now);
+                filter.linearRampToValueAtTime(320, now + 0.15);
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.4, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                noise.connect(filter); filter.connect(gain); gain.connect(this.ctx.destination);
+                noise.start(now);
+            }
+
+            playSniperShot() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                // 高压冲击爆鸣
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(480, now);
+                osc.frequency.exponentialRampToValueAtTime(45, now + 0.35);
+                gain.gain.setValueAtTime(1.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(now); osc.stop(now + 0.45);
+
+                // 远距离狙击子弹激波
+                const bufferSize = Math.floor(this.ctx.sampleRate * 0.5);
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.12));
+                }
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(900, now);
+                const nGain = this.ctx.createGain();
+                nGain.gain.setValueAtTime(0.7, now);
+                nGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                noise.connect(filter); filter.connect(nGain); nGain.connect(this.ctx.destination);
+                noise.start(now);
+            }
+
+            playAmmuNationBuy() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                // 枪栓后拉上膛咔哒声
+                [600, 950].forEach((freq, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(freq, now + i * 0.08);
+                    gain.gain.setValueAtTime(0.2, now + i * 0.08);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.08 + 0.06);
+                    osc.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(now + i * 0.08); osc.stop(now + i * 0.08 + 0.06);
+                });
+            }
+
             // 🚕 v0.13 出租车双音频汽车喇叭、计程表跳表与结算音效
             playCarHorn() {
                 if (!this.ctx) return;
@@ -957,6 +1113,13 @@
         // --- v0.13 Kaufman Cabs 出租车与拉客支线任务状态 ---
         let taxiCab = null;
         let inTaxi = false;
+
+        // --- v0.14 Ammu-Nation 军火商店与狙击瞄准系统 ---
+        let ammuStoreGroup = null;
+        let ammuPickupBeacon = null;
+        let isSniperScoped = false;
+        const flames = [];
+
         let taxiMissionActive = false;
         let taxiState = 'IDLE'; // IDLE, SEARCHING, PICKING_UP, ON_TRIP
         let currentPassenger = null;
@@ -985,6 +1148,8 @@
             { id: 'fist', name: 'FIST (拳头)', ammo: Infinity, maxAmmo: Infinity, range: 2.8, spread: 0 },
             { id: 'uzi', name: 'UZI-9MM', ammo: 150, maxAmmo: 150, range: 60, spread: 0.03 },
             { id: 'shotgun', name: 'SPAS-12 SHOTGUN', ammo: 40, maxAmmo: 40, range: 35, spread: 0.12 },
+            { id: 'sniper', name: 'PSG-1 SNIPER (高精狙)', ammo: 30, maxAmmo: 30, range: 300, spread: 0.001 },
+            { id: 'flamethrower', name: 'M2 火焰喷射器', ammo: 250, maxAmmo: 250, range: 22, spread: 0.12 },
             { id: 'rpg', name: 'RPG-7 ROCKET', ammo: 10, maxAmmo: 10, range: 220, spread: 0.01 }
         ];
         let currentWeaponIndex = 1; // 默认 UZI
@@ -1275,6 +1440,7 @@
             createBikePCJ(8, 22); // 🏍️ 停靠在 Ocean View 迎宾大道旁的 PCJ-600
             createStuntRamps();   // 🏁 迈阿密三大经典特技跳跃坡道
             createKaufmanTaxi(-8, 14); // 🚕 停靠在黄金大道的 Kaufman 经典出租车
+            createAmmuNationStore();   // 🎯 经典军火商行 Ammu-Nation
 
             // 🌴 v0.11 标志性地标：Ocean View Hotel (罪恶都市经典大饭店)
             const hotelGroup = new THREE.Group();
@@ -2403,6 +2569,126 @@
             startNewPassengerSearch();
         }
 
+        
+        // ================= v0.14 经典军火商行 Ammu-Nation 地标 =================
+        function createAmmuNationStore() {
+            ammuStoreGroup = new THREE.Group();
+
+            // 1. 军火商店主建筑体 (深灰战术与红砖配色)
+            const mainGeo = new THREE.BoxGeometry(26, 12, 18);
+            const mainMat = new THREE.MeshStandardMaterial({ color: 0x3d3d3d, roughness: 0.8 });
+            const mainBuilding = new THREE.Mesh(mainGeo, mainMat);
+            mainBuilding.position.set(0, 6, 0);
+            mainBuilding.castShadow = true;
+            mainBuilding.receiveShadow = true;
+            ammuStoreGroup.add(mainBuilding);
+
+            // 2. 经典红色斜雨棚 (Red-White Ammu Awning)
+            const awningGeo = new THREE.BoxGeometry(24, 0.4, 4.5);
+            const awningMat = new THREE.MeshStandardMaterial({ color: 0xd63031, roughness: 0.5 });
+            const awning = new THREE.Mesh(awningGeo, awningMat);
+            awning.rotation.x = 0.28;
+            awning.position.set(0, 4.8, 9.2);
+            ammuStoreGroup.add(awning);
+
+            // 3. 门头高亮发光霓虹双枪靶心招牌 (AMMU-NATION Sign)
+            const signBackGeo = new THREE.BoxGeometry(20, 2.4, 0.4);
+            const signBackMat = new THREE.MeshStandardMaterial({ color: 0x1e272e, roughness: 0.6 });
+            const signBack = new THREE.Mesh(signBackGeo, signBackMat);
+            signBack.position.set(0, 7.8, 9.2);
+            ammuStoreGroup.add(signBack);
+
+            // 霓虹红黄文字底板与灯光
+            const neonGeo = new THREE.BoxGeometry(18.5, 1.6, 0.2);
+            const neonMat = new THREE.MeshStandardMaterial({
+                color: 0xff3838,
+                emissive: 0xff3838,
+                emissiveIntensity: 0.85
+            });
+            const neonSign = new THREE.Mesh(neonGeo, neonMat);
+            neonSign.position.set(0, 7.8, 9.45);
+            ammuStoreGroup.add(neonSign);
+
+            // 双枪靶心标志 (圆盘靶心)
+            const targetGeo = new THREE.CylinderGeometry(1.0, 1.0, 0.3, 16);
+            const targetMat = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                emissive: 0xffffff,
+                emissiveIntensity: 0.7
+            });
+            const targetDisc = new THREE.Mesh(targetGeo, targetMat);
+            targetDisc.rotation.x = Math.PI / 2;
+            targetDisc.position.set(0, 10.2, 9.2);
+            ammuStoreGroup.add(targetDisc);
+
+            // 4. 正门落地防弹玻璃与金属门框
+            const doorGeo = new THREE.BoxGeometry(5.0, 3.8, 0.2);
+            const doorMat = new THREE.MeshStandardMaterial({ color: 0x0984e3, roughness: 0.1, transparent: true, opacity: 0.7 });
+            const door = new THREE.Mesh(doorGeo, doorMat);
+            door.position.set(0, 1.9, 9.05);
+            ammuStoreGroup.add(door);
+
+            // 5. 店门前旋转发光军火采购信标 (Gun Pickup Beacon)
+            const beaconGroup = new THREE.Group();
+            const beaconGeo = new THREE.CylinderGeometry(1.6, 1.6, 6.0, 16, 1, true);
+            const beaconMat = new THREE.MeshBasicMaterial({
+                color: 0xff3838,
+                transparent: true,
+                opacity: 0.45,
+                side: THREE.DoubleSide
+            });
+            const beaconMesh = new THREE.Mesh(beaconGeo, beaconMat);
+            beaconMesh.position.y = 3.0;
+            beaconGroup.add(beaconMesh);
+
+            // 内部悬浮旋转枪支模型 (UZI 枪标)
+            const gunIconGeo = new THREE.BoxGeometry(0.8, 0.4, 1.4);
+            const gunIconMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9, roughness: 0.1 });
+            const gunIcon = new THREE.Mesh(gunIconGeo, gunIconMat);
+            gunIcon.position.y = 1.6;
+            beaconGroup.add(gunIcon);
+
+            // 地面旋转光圈
+            const ringGeo = new THREE.RingGeometry(1.4, 2.0, 32);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0xff3838, side: THREE.DoubleSide });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = -Math.PI / 2;
+            ring.position.y = 0.08;
+            beaconGroup.add(ring);
+
+            beaconGroup.position.set(0, 0, 13.5);
+            ammuStoreGroup.add(beaconGroup);
+            ammuPickupBeacon = beaconGroup;
+
+            ammuStoreGroup.position.set(-48, 0, -70);
+            ammuStoreGroup.rotation.y = Math.PI / 2;
+            scene.add(ammuStoreGroup);
+        }
+
+        // 站在军火商行信标内补给弹药与护甲
+        function buyAmmuNationSupplies() {
+            if (playerMoney < 500) {
+                const banner = document.getElementById('ammu-banner');
+                banner.innerText = 'AMMU-NATION: 资金不足！需要 $500 购买军火补给包';
+                banner.style.display = 'block';
+                setTimeout(() => { banner.style.display = 'none'; }, 2000);
+                return;
+            }
+            playerMoney -= 500;
+            document.querySelector('.vc-money').innerText = '$' + playerMoney.toString().padStart(8, '0');
+            weaponList.forEach(w => {
+                if (w.ammo !== Infinity) w.ammo = w.maxAmmo;
+            });
+            armorEl.innerText = '100';
+            updateWeaponHUD();
+            sfx.playAmmuNationBuy();
+
+            const banner = document.getElementById('ammu-banner');
+            banner.innerText = 'AMMU-NATION: 全套重武器弹药与防弹衣已补满! (-$500)';
+            banner.style.display = 'block';
+            setTimeout(() => { banner.style.display = 'none'; }, 2400);
+        }
+
         function createVehicle() {
             // 经典超跑 Infernus (车身流线型与尾翼)
             car = new THREE.Group();
@@ -2462,7 +2748,20 @@
 
         function setupInput() {
 
-            window.addEventListener('mousedown', (e) => {
+            window.addEventListener('contextmenu', e => e.preventDefault());
+        window.addEventListener('mousedown', (e) => {
+                // 🎯 v0.14 鼠标右键开启/退出 PSG-1 高精狙瞄准镜
+                if (e.button === 2 && isPointerLocked) {
+                    const curWeapon = weaponList[currentWeaponIndex];
+                    if (curWeapon.id === 'sniper') {
+                        isSniperScoped = !isSniperScoped;
+                        document.getElementById('sniper-scope').style.display = isSniperScoped ? 'flex' : 'none';
+                        camera.fov = isSniperScoped ? 22 : 75;
+                        camera.updateProjectionMatrix();
+                        player.visible = !isSniperScoped; // 🎯 开镜隐藏主角身体，第一人称远望
+                        return;
+                    }
+                }
                 if (e.button === 0 && isPointerLocked) {
                     if (inTank && tankRhino && tankRhino.userData.fireCooldown === 0) {
                         tankRhino.userData.fireCooldown = 35; // 射击冷却
@@ -2509,12 +2808,23 @@
 
 
                 // Q / E 轮换武器
+                                if (e.code === 'KeyE') {
+                    if (ammuPickupBeacon) {
+                        const beaconWorldPos = new THREE.Vector3();
+                        ammuPickupBeacon.getWorldPosition(beaconWorldPos);
+                        if (player.position.distanceTo(beaconWorldPos) < 5.0) {
+                            buyAmmuNationSupplies();
+                        }
+                    }
+                }
                 if (e.code === 'KeyQ') {
                     currentWeaponIndex = (currentWeaponIndex - 1 + weaponList.length) % weaponList.length;
+                    if (isSniperScoped) { isSniperScoped = false; document.getElementById('sniper-scope').style.display = 'none'; camera.fov = 75; camera.updateProjectionMatrix(); player.visible = true; }
                     updateWeaponHUD();
                 }
                 if (e.code === 'KeyE') {
                     currentWeaponIndex = (currentWeaponIndex + 1) % weaponList.length;
+                    if (isSniperScoped) { isSniperScoped = false; document.getElementById('sniper-scope').style.display = 'none'; camera.fov = 75; camera.updateProjectionMatrix(); player.visible = true; }
                     updateWeaponHUD();
                 }
 
@@ -2647,6 +2957,41 @@
                 for (let i = -2; i <= 2; i++) {
                     const spreadDir = shootDir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), i * 0.04);
                     spawnBullet(shootOrigin, spreadDir, curWeapon.spread);
+                }
+            } else if (curWeapon.id === 'sniper') {
+                sfx.playSniperShot();
+                camTrauma = 0.45;
+                // 高速高穿透狙击穿甲弹 (超长弹道尾迹)
+                const sGeo = new THREE.CylinderGeometry(0.06, 0.06, 2.8, 6);
+                const sMat = new THREE.MeshBasicMaterial({ color: 0x00ff88 });
+                const sTracer = new THREE.Mesh(sGeo, sMat);
+                sTracer.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), shootDir);
+                sTracer.position.copy(shootOrigin.clone().addScaledVector(shootDir, 1.5));
+                sTracer.userData = { dir: shootDir, life: 75, speed: 4.8, isSniper: true };
+                scene.add(sTracer);
+                bullets.push(sTracer);
+            } else if (curWeapon.id === 'flamethrower') {
+                sfx.playFlamethrower();
+                // 生成滚烫火焰粒子流 (Flame Particles)
+                for (let i = 0; i < 3; i++) {
+                    const fGeo = new THREE.SphereGeometry(0.35 + Math.random() * 0.25, 6, 6);
+                    const fColors = [0xff9f1a, 0xff3838, 0xfffa65];
+                    const fMat = new THREE.MeshBasicMaterial({
+                        color: fColors[Math.floor(Math.random() * fColors.length)],
+                        transparent: true,
+                        opacity: 0.85
+                    });
+                    const flame = new THREE.Mesh(fGeo, fMat);
+                    const fDir = shootDir.clone();
+                    fDir.x += (Math.random() - 0.5) * curWeapon.spread;
+                    fDir.y += (Math.random() - 0.5) * curWeapon.spread;
+                    fDir.z += (Math.random() - 0.5) * curWeapon.spread;
+                    fDir.normalize();
+
+                    flame.position.copy(shootOrigin.clone().addScaledVector(fDir, 1.2));
+                    flame.userData = { dir: fDir, life: 32, maxLife: 32, speed: 0.72 + Math.random() * 0.35 };
+                    scene.add(flame);
+                    flames.push(flame);
                 }
             } else if (curWeapon.id === 'rpg') {
                 sfx.playRocketLaunch();
@@ -2973,9 +3318,53 @@
                 camera.position.y = player.position.y + Math.sin(cameraAngle.pitch) * camDist + 2.0;
                 camera.position.z = player.position.z + Math.cos(cameraAngle.yaw) * Math.cos(cameraAngle.pitch) * camDist;
                 camera.lookAt(player.position.x, player.position.y + 1.8, player.position.z);
+
+                // 检测是否位于 Ammu-Nation 军火补给点
+                if (ammuPickupBeacon) {
+                    const beaconWorldPos = new THREE.Vector3();
+                    ammuPickupBeacon.getWorldPosition(beaconWorldPos);
+                    const distToBeacon = player.position.distanceTo(beaconWorldPos);
+                    if (distToBeacon < 4.8) {
+                        vehiclePrompt.innerText = '按 [E] 补充全部军火弹药与防弹护甲 ($500)';
+                        vehiclePrompt.style.display = 'block';
+                    }
+                }
+
             }
 
             
+            
+            // 🔥 v0.14 更新火焰喷射器火焰粒子动态与范围灼烧判定
+            for (let i = flames.length - 1; i >= 0; i--) {
+                const f = flames[i];
+                f.userData.life--;
+                f.position.addScaledVector(f.userData.dir, f.userData.speed);
+                // 火焰扩散放大与半透明衰减
+                const scale = 1.0 + (1.0 - f.userData.life / f.userData.maxLife) * 2.2;
+                f.scale.set(scale, scale, scale);
+                f.material.opacity = (f.userData.life / f.userData.maxLife) * 0.85;
+
+                // 范围灼烧行人
+                pedestrians.forEach(ped => {
+                    if (!ped.userData.isDead && ped.position.distanceTo(f.position) < 2.2) {
+                        killPedestrian(ped);
+                    }
+                });
+
+                // 引爆附近警车与车辆
+                policeCars.forEach(p => {
+                    if (!p.userData.isExploded && p.position.distanceTo(f.position) < 3.2) {
+                        spawnExplosion(p.position);
+                        p.userData.isExploded = true;
+                    }
+                });
+
+                if (f.userData.life <= 0) {
+                    scene.remove(f);
+                    flames.splice(i, 1);
+                }
+            }
+
             // 更新飞行子弹与弹道轨迹
             for (let i = bullets.length - 1; i >= 0; i--) {
                 const b = bullets[i];
@@ -3402,6 +3791,19 @@
                 const tkRelZ = (tankRhino.position.z - activePos.z) * 1.5;
                 ctx.fillStyle = '#2d6a4f';
                 ctx.fillRect(tkRelX - 5, tkRelZ - 5, 10, 10);
+            }
+
+            // 🎯 绘制 Ammu-Nation 军火商行标记 (高亮红色十字靶心)
+            if (ammuStoreGroup) {
+                const aRelX = (-48 - activePos.x) * 1.5;
+                const aRelZ = (-70 - activePos.z) * 1.5;
+                ctx.fillStyle = '#ff3838';
+                ctx.fillRect(aRelX - 4, aRelZ - 4, 8, 8);
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(aRelX, aRelZ, 6, 0, Math.PI * 2);
+                ctx.stroke();
             }
 
             // 🚕 绘制 Kaufman 出租车标记 (明黄色方块)
