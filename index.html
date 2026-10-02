@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Grand Theft Auto: Vice City - Web 3D (v0.16 - SWAT 特警部队、重型 Enforcer 防暴车与路障钉刺系统)</title>
+    <title>Grand Theft Auto: Vice City - Web 3D (v0.17 - Sea Sparrow 水陆两栖武装直升机与全域飞行系统)</title>
     <style>
         * {
             box-sizing: border-box;
@@ -59,6 +59,38 @@
         
         
         
+        
+        /* v0.17 Sea Sparrow 直升机飞行高度与航速 HUD */
+        #heli-hud {
+            position: absolute;
+            bottom: 30px;
+            right: 28px;
+            background: rgba(18, 5, 29, 0.85);
+            border: 2px solid #00f0ff;
+            border-radius: 8px;
+            padding: 10px 16px;
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            letter-spacing: 1.5px;
+            box-shadow: 0 4px 18px rgba(0, 240, 255, 0.35);
+            z-index: 50;
+            pointer-events: none;
+        }
+        .heli-hud-title {
+            color: #00f0ff;
+            font-size: 18px;
+            text-shadow: 1px 1px 0 #005f73;
+        }
+        .heli-hud-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            font-size: 15px;
+            color: #fff;
+        }
+
         /* v0.16 SWAT 路障与爆胎警报 HUD */
         #roadblock-warning {
             position: absolute;
@@ -619,6 +651,15 @@
     
     
     
+    
+    <!-- v0.17 Sea Sparrow 直升机飞行仪表 -->
+    <div id="heli-hud">
+        <div class="heli-hud-title">🚁 SEA SPARROW</div>
+        <div class="heli-hud-row"><span>ALTITUDE (高度):</span><span id="heli-alt-val" style="color:#55c842;">0M</span></div>
+        <div class="heli-hud-row"><span>AIRSPEED (空速):</span><span id="heli-spd-val" style="color:#ffe600;">0 KTS</span></div>
+        <div class="heli-hud-row"><span>ROTOR:</span><span id="heli-rotor-val" style="color:#00d2d3;">100%</span></div>
+    </div>
+
     <!-- v0.16 SWAT 警方路障与爆胎警告横幅 -->
     <div id="roadblock-warning">⚠️ VCPD SWAT 战术特警路障已部署：前方钉刺带 ⚠️</div>
     <div id="puncture-banner">💥 轮胎已被钉刺带刺破！车辆牵引力丧失，极速剧降 (-60%) 💥</div>
@@ -1042,6 +1083,49 @@
             
             
             
+            
+            // 🚁 v0.17 Sea Sparrow 涡轮轴直升机引擎轰鸣与机载转管加特林机枪
+            playHelicopterTurbine(rotorRpm) {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                // 涡轮啸叫 (Turbine Whine)
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                const baseFreq = 80 + rotorRpm * 320;
+                osc.frequency.setValueAtTime(baseFreq, now);
+                gain.gain.setValueAtTime(0.09, now);
+                gain.gain.exponentialRampToValueAtTime(0.005, now + 0.15);
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(baseFreq * 2.5, now);
+                osc.connect(filter); filter.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(now); osc.stop(now + 0.15);
+
+                // 旋翼破空重击声 (Blade Slap)
+                const bOsc = this.ctx.createOscillator();
+                const bGain = this.ctx.createGain();
+                bOsc.type = 'square';
+                bOsc.frequency.setValueAtTime(28, now);
+                bGain.gain.setValueAtTime(0.18 * rotorRpm, now);
+                bGain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+                bOsc.connect(bGain); bGain.connect(this.ctx.destination);
+                bOsc.start(now); bOsc.stop(now + 0.12);
+            }
+
+            playHeliGatling() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(260 + Math.random() * 50, now);
+                gain.gain.setValueAtTime(0.22, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.06);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(now); osc.stop(now + 0.06);
+            }
+
             // 🚨 v0.16 SWAT 防暴警笛与钉刺爆胎音效
             playTirePop() {
                 if (!this.ctx) return;
@@ -1309,6 +1393,13 @@
         // --- v0.15 Malibu Club 玛里布夜总会与动感舞池状态 ---
         
         // --- v0.16 SWAT 特警部队与路障钉刺带系统 ---
+        
+        // --- v0.17 Sea Sparrow 水陆两栖武装直升机状态 ---
+        let seaSparrow = null;
+        let inHeli = false;
+        let heliRotorSpeed = 0;
+        let heliVelocity = new THREE.Vector3();
+
         const swatEnforcers = [];
         const spikeStrips = [];
         const swatOfficers = [];
@@ -1651,6 +1742,7 @@
             createAmmuNationStore();   // 🎯 经典军火商行 Ammu-Nation
             createMalibuClub();         // 🍸 经典夜总会 Malibu Club 玛里布俱乐部
             deploySWATRoadblock(-40);   // 🚨 部署主干道 SWAT 特警路障与钉刺带
+            createSeaSparrow(175, 10);  // 🚁 停靠在东海岸水陆交界处的 Sea Sparrow 水陆两栖武装直升机
 
             // 🌴 v0.11 标志性地标：Ocean View Hotel (罪恶都市经典大饭店)
             const hotelGroup = new THREE.Group();
@@ -2785,6 +2877,119 @@
         // ================= v0.15 经典夜总会 Malibu Club 玛里布俱乐部 =================
         
         // ================= v0.16 SWAT 特警部队与重型 Enforcer 防暴装甲车 =================
+        
+        // ================= v0.17 Sea Sparrow 水陆两栖武装直升机 =================
+        function createSeaSparrow(x, z) {
+            seaSparrow = new THREE.Group();
+
+            // 1. 水滴形轻量化流线机身
+            const podGeo = new THREE.SphereGeometry(1.6, 16, 12);
+            podGeo.scale(1.0, 1.15, 1.6);
+            const podMat = new THREE.MeshStandardMaterial({ color: 0xf39c12, roughness: 0.35, metalness: 0.4 });
+            const pod = new THREE.Mesh(podGeo, podMat);
+            pod.position.y = 1.4;
+            pod.castShadow = true;
+            seaSparrow.add(pod);
+
+            // 2. 气泡球形全景高透驾驶舱罩 (Bubble Cockpit)
+            const bubbleGeo = new THREE.SphereGeometry(1.4, 16, 12);
+            bubbleGeo.scale(0.95, 1.05, 1.2);
+            const bubbleMat = new THREE.MeshStandardMaterial({
+                color: 0x81ecec,
+                transparent: true,
+                opacity: 0.65,
+                roughness: 0.1,
+                metalness: 0.2
+            });
+            const bubble = new THREE.Mesh(bubbleGeo, bubbleMat);
+            bubble.position.set(0, 1.48, -0.65);
+            seaSparrow.add(bubble);
+
+            // 3. 经典双水面浮筒 (Amphibious Dual Pontoons)
+            const pontoonGeo = new THREE.CylinderGeometry(0.38, 0.38, 5.2, 12);
+            const pontoonMat = new THREE.MeshStandardMaterial({ color: 0x2d3436, roughness: 0.7 });
+            [-1.1, 1.1].forEach(px => {
+                const pt = new THREE.Mesh(pontoonGeo, pontoonMat);
+                pt.rotation.x = Math.PI / 2;
+                pt.position.set(px, 0.38, -0.1);
+                pt.castShadow = true;
+                seaSparrow.add(pt);
+
+                // 浮筒前尖端整流锥
+                const noseGeo = new THREE.ConeGeometry(0.38, 0.8, 12);
+                const nose = new THREE.Mesh(noseGeo, pontoonMat);
+                nose.rotation.x = -Math.PI / 2;
+                nose.position.set(px, 0.38, -2.9);
+                seaSparrow.add(nose);
+
+                // 连接支架
+                const strutGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.0, 6);
+                const strutMat = new THREE.MeshStandardMaterial({ color: 0xdcdde1, metalness: 0.8 });
+                [-1.0, 1.0].forEach(pz => {
+                    const strut = new THREE.Mesh(strutGeo, strutMat);
+                    strut.position.set(px * 0.75, 0.85, pz);
+                    seaSparrow.add(strut);
+                });
+            });
+
+            // 4. 细长尾梁与垂直尾翼 (Tail Boom & Fin)
+            const boomGeo = new THREE.CylinderGeometry(0.18, 0.08, 4.8, 8);
+            const boomMat = new THREE.MeshStandardMaterial({ color: 0xf39c12, roughness: 0.4 });
+            const boom = new THREE.Mesh(boomGeo, boomMat);
+            boom.rotation.x = Math.PI / 2;
+            boom.position.set(0, 1.7, 3.4);
+            seaSparrow.add(boom);
+
+            const finGeo = new THREE.BoxGeometry(0.08, 1.4, 0.8);
+            const fin = new THREE.Mesh(finGeo, boomMat);
+            fin.position.set(0, 2.1, 5.7);
+            seaSparrow.add(fin);
+
+            // 5. 主旋翼轴与主双叶旋翼 (Main Rotor Blades)
+            const mastGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.65, 8);
+            const mastMat = new THREE.MeshStandardMaterial({ color: 0x2d3436, metalness: 0.9 });
+            const mast = new THREE.Mesh(mastGeo, mastMat);
+            mast.position.set(0, 2.65, -0.2);
+            seaSparrow.add(mast);
+
+            const mainRotorGroup = new THREE.Group();
+            const bladeGeo = new THREE.BoxGeometry(0.24, 0.04, 7.8);
+            const bladeMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.5 });
+            const blades = new THREE.Mesh(bladeGeo, bladeMat);
+            mainRotorGroup.add(blades);
+            mainRotorGroup.position.set(0, 2.98, -0.2);
+            seaSparrow.add(mainRotorGroup);
+
+            // 6. 尾部防扭小尾桨 (Tail Rotor)
+            const tailRotorGroup = new THREE.Group();
+            const tBladeGeo = new THREE.BoxGeometry(0.08, 1.2, 0.04);
+            const tBlades = new THREE.Mesh(tBladeGeo, bladeMat);
+            tailRotorGroup.add(tBlades);
+            tailRotorGroup.position.set(0.12, 2.2, 5.75);
+            seaSparrow.add(tailRotorGroup);
+
+            // 7. 机首下挂机载转管加特林机枪 (Front Gatling Gun)
+            const gunPodGeo = new THREE.CylinderGeometry(0.12, 0.12, 1.2, 8);
+            const gunPodMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9, roughness: 0.2 });
+            const gunPod = new THREE.Mesh(gunPodGeo, gunPodMat);
+            gunPod.rotation.x = Math.PI / 2;
+            gunPod.position.set(0, 0.65, -1.8);
+            seaSparrow.add(gunPod);
+
+            seaSparrow.position.set(x, 0.4, z);
+            seaSparrow.userData = {
+                mainRotorGroup,
+                tailRotorGroup,
+                altitude: 0.4,
+                verticalVelocity: 0,
+                pitch: 0,
+                roll: 0,
+                airspeed: 0,
+                shootCooldown: 0
+            };
+            scene.add(seaSparrow);
+        }
+
         function createSWATEnforcer(x, z, rotY = 0) {
             const enforcer = new THREE.Group();
 
@@ -3586,7 +3791,7 @@
             const distToTaxi = taxiCab ? player.position.distanceTo(taxiCab.position) : 999;
 
             if (!inVehicle && !inBoat && !inTank && !inBike && !inTaxi) {
-                // 检查是否靠近 SWAT Enforcer 防暴装甲车
+                const distToHeli = seaSparrow ? player.position.distanceTo(seaSparrow.position) : 999;
                 let nearestEnforcer = null;
                 let minDistE = 999;
                 swatEnforcers.forEach(e => {
@@ -3594,7 +3799,13 @@
                     if (d < minDistE) { minDistE = d; nearestEnforcer = e; }
                 });
 
-                if (minDistE < 5.5 && nearestEnforcer) {
+                if (distToHeli < 6.5) {
+                    inHeli = true;
+                    sfx.playDoorSlam();
+                    document.getElementById("heli-hud").style.display = "flex";
+                    player.visible = false;
+                    vehiclePrompt.style.display = 'none';
+                } else if (minDistE < 5.5 && nearestEnforcer) {
                     inEnforcer = true;
                     activeEnforcer = nearestEnforcer;
                     sfx.playDoorSlam();
@@ -3632,7 +3843,99 @@
                     player.visible = false;
                     vehiclePrompt.style.display = 'none';
                 }
-            } else if (inEnforcer && activeEnforcer) {
+            } else if (inHeli) {
+                if (seaSparrow.position.y > 2.5) return; // 高空严禁跳机
+                inHeli = false;
+                sfx.playDoorSlam();
+                document.getElementById("heli-hud").style.display = "none";
+                player.visible = true;
+                player.position.set(seaSparrow.position.x - 3.2, seaSparrow.position.y, seaSparrow.position.z);
+            } else 
+            // 🚁 v0.17 Sea Sparrow 飞行动力学与全域飞行系统
+            if (seaSparrow) {
+                const hData = seaSparrow.userData;
+                // 旋翼持续旋转动画
+                const targetRotorSpeed = inHeli ? 1.0 : 0.0;
+                heliRotorSpeed = THREE.MathUtils.lerp(heliRotorSpeed, targetRotorSpeed, 0.035);
+                hData.mainRotorGroup.rotation.y += heliRotorSpeed * 0.55;
+                hData.tailRotorGroup.rotation.x += heliRotorSpeed * 0.85;
+
+                if (inHeli) {
+                    // 涡轮音效
+                    if (Math.random() < 0.35) sfx.playHelicopterTurbine(heliRotorSpeed);
+
+                    // 1. 垂直高度控制 (Collective: W上升 / S下降)
+                    if (keys['KeyW'] || keys['Space']) {
+                        hData.verticalVelocity = Math.min(0.55, hData.verticalVelocity + 0.018);
+                    } else if (keys['KeyS'] || keys['ShiftLeft']) {
+                        hData.verticalVelocity = Math.max(-0.45, hData.verticalVelocity - 0.018);
+                    } else {
+                        hData.verticalVelocity *= 0.94; // 悬停缓降
+                    }
+                    seaSparrow.position.y += hData.verticalVelocity;
+
+                    // 2. 偏航转向 (Yaw: A / D)
+                    if (keys['KeyA']) seaSparrow.rotation.y += 0.035;
+                    if (keys['KeyD']) seaSparrow.rotation.y -= 0.035;
+
+                    // 3. 俯仰与前向冲刺 (Pitch: ArrowUp / ArrowDown)
+                    let targetPitch = 0;
+                    if (keys['ArrowUp']) targetPitch = 0.28;
+                    if (keys['ArrowDown']) targetPitch = -0.22;
+                    hData.pitch = THREE.MathUtils.lerp(hData.pitch, targetPitch, 0.08);
+                    seaSparrow.rotation.x = hData.pitch;
+
+                    // 前推向前高速位移
+                    if (keys['ArrowUp']) {
+                        hData.airspeed = Math.min(2.4, hData.airspeed + 0.035);
+                    } else if (keys['ArrowDown']) {
+                        hData.airspeed = Math.max(-0.8, hData.airspeed - 0.03);
+                    } else {
+                        hData.airspeed *= 0.985;
+                    }
+                    seaSparrow.translateZ(-hData.airspeed);
+
+                    // 4. 横滚侧飞 (Roll: ArrowLeft / ArrowRight)
+                    let targetRoll = 0;
+                    if (keys['ArrowLeft']) targetRoll = 0.35;
+                    if (keys['ArrowRight']) targetRoll = -0.35;
+                    hData.roll = THREE.MathUtils.lerp(hData.roll, targetRoll, 0.08);
+                    seaSparrow.rotation.z = hData.roll;
+                    if (keys['ArrowLeft']) seaSparrow.translateX(-0.25);
+                    if (keys['ArrowRight']) seaSparrow.translateX(0.25);
+
+                    // 5. 水面浮筒浮力与陆地触底限制
+                    const groundLevel = (seaSparrow.position.x > 150 ? 0.35 + Math.sin(Date.now() * 0.003) * 0.15 : 0.4);
+                    if (seaSparrow.position.y <= groundLevel) {
+                        seaSparrow.position.y = groundLevel;
+                        hData.verticalVelocity = 0;
+                    }
+
+                    // 6. 更新直升机仪表盘 HUD
+                    document.getElementById('heli-alt-val').innerText = Math.round(seaSparrow.position.y) + 'M';
+                    document.getElementById('heli-spd-val').innerText = Math.round(Math.abs(hData.airspeed) * 65) + ' KTS';
+                    document.getElementById('heli-rotor-val').innerText = Math.round(heliRotorSpeed * 100) + '%';
+
+                    // 7. 第三人称平滑远距飞行运镜
+                    const offset = new THREE.Vector3(0, 4.5, 12.0).applyAxisAngle(new THREE.Vector3(0, 1, 0), seaSparrow.rotation.y);
+                    camera.position.lerp(seaSparrow.position.clone().add(offset), 0.12);
+                    camera.lookAt(seaSparrow.position.clone().add(new THREE.Vector3(0, 1.0, 0)));
+
+                    // 8. 机载加特林机枪连射 (按住鼠标左键)
+                    if (keys['Mouse0'] || keys['KeyE']) {
+                        if (hData.shootCooldown <= 0) {
+                            hData.shootCooldown = 4;
+                            sfx.playHeliGatling();
+                            const gDir = new THREE.Vector3(0, 0, -1).applyEuler(seaSparrow.rotation);
+                            const gOrigin = seaSparrow.position.clone().add(new THREE.Vector3(0, 0.65, 0)).addScaledVector(gDir, 2.5);
+                            spawnBullet(gOrigin, gDir, 0.04);
+                        }
+                    }
+                    if (hData.shootCooldown > 0) hData.shootCooldown--;
+                }
+            }
+
+            if (inEnforcer && activeEnforcer) {
                 inEnforcer = false;
                 sfx.playDoorSlam();
                 document.getElementById("speedo-box").style.display = "none";
@@ -3778,6 +4081,91 @@
             // 🚕 出租车营运支线任务状态轮询
             
             // 🚨 v0.16 SWAT Enforcer 防暴装甲车驾驶物理
+            
+            // 🚁 v0.17 Sea Sparrow 飞行动力学与全域飞行系统
+            if (seaSparrow) {
+                const hData = seaSparrow.userData;
+                // 旋翼持续旋转动画
+                const targetRotorSpeed = inHeli ? 1.0 : 0.0;
+                heliRotorSpeed = THREE.MathUtils.lerp(heliRotorSpeed, targetRotorSpeed, 0.035);
+                hData.mainRotorGroup.rotation.y += heliRotorSpeed * 0.55;
+                hData.tailRotorGroup.rotation.x += heliRotorSpeed * 0.85;
+
+                if (inHeli) {
+                    // 涡轮音效
+                    if (Math.random() < 0.35) sfx.playHelicopterTurbine(heliRotorSpeed);
+
+                    // 1. 垂直高度控制 (Collective: W上升 / S下降)
+                    if (keys['KeyW'] || keys['Space']) {
+                        hData.verticalVelocity = Math.min(0.55, hData.verticalVelocity + 0.018);
+                    } else if (keys['KeyS'] || keys['ShiftLeft']) {
+                        hData.verticalVelocity = Math.max(-0.45, hData.verticalVelocity - 0.018);
+                    } else {
+                        hData.verticalVelocity *= 0.94; // 悬停缓降
+                    }
+                    seaSparrow.position.y += hData.verticalVelocity;
+
+                    // 2. 偏航转向 (Yaw: A / D)
+                    if (keys['KeyA']) seaSparrow.rotation.y += 0.035;
+                    if (keys['KeyD']) seaSparrow.rotation.y -= 0.035;
+
+                    // 3. 俯仰与前向冲刺 (Pitch: ArrowUp / ArrowDown)
+                    let targetPitch = 0;
+                    if (keys['ArrowUp']) targetPitch = 0.28;
+                    if (keys['ArrowDown']) targetPitch = -0.22;
+                    hData.pitch = THREE.MathUtils.lerp(hData.pitch, targetPitch, 0.08);
+                    seaSparrow.rotation.x = hData.pitch;
+
+                    // 前推向前高速位移
+                    if (keys['ArrowUp']) {
+                        hData.airspeed = Math.min(2.4, hData.airspeed + 0.035);
+                    } else if (keys['ArrowDown']) {
+                        hData.airspeed = Math.max(-0.8, hData.airspeed - 0.03);
+                    } else {
+                        hData.airspeed *= 0.985;
+                    }
+                    seaSparrow.translateZ(-hData.airspeed);
+
+                    // 4. 横滚侧飞 (Roll: ArrowLeft / ArrowRight)
+                    let targetRoll = 0;
+                    if (keys['ArrowLeft']) targetRoll = 0.35;
+                    if (keys['ArrowRight']) targetRoll = -0.35;
+                    hData.roll = THREE.MathUtils.lerp(hData.roll, targetRoll, 0.08);
+                    seaSparrow.rotation.z = hData.roll;
+                    if (keys['ArrowLeft']) seaSparrow.translateX(-0.25);
+                    if (keys['ArrowRight']) seaSparrow.translateX(0.25);
+
+                    // 5. 水面浮筒浮力与陆地触底限制
+                    const groundLevel = (seaSparrow.position.x > 150 ? 0.35 + Math.sin(Date.now() * 0.003) * 0.15 : 0.4);
+                    if (seaSparrow.position.y <= groundLevel) {
+                        seaSparrow.position.y = groundLevel;
+                        hData.verticalVelocity = 0;
+                    }
+
+                    // 6. 更新直升机仪表盘 HUD
+                    document.getElementById('heli-alt-val').innerText = Math.round(seaSparrow.position.y) + 'M';
+                    document.getElementById('heli-spd-val').innerText = Math.round(Math.abs(hData.airspeed) * 65) + ' KTS';
+                    document.getElementById('heli-rotor-val').innerText = Math.round(heliRotorSpeed * 100) + '%';
+
+                    // 7. 第三人称平滑远距飞行运镜
+                    const offset = new THREE.Vector3(0, 4.5, 12.0).applyAxisAngle(new THREE.Vector3(0, 1, 0), seaSparrow.rotation.y);
+                    camera.position.lerp(seaSparrow.position.clone().add(offset), 0.12);
+                    camera.lookAt(seaSparrow.position.clone().add(new THREE.Vector3(0, 1.0, 0)));
+
+                    // 8. 机载加特林机枪连射 (按住鼠标左键)
+                    if (keys['Mouse0'] || keys['KeyE']) {
+                        if (hData.shootCooldown <= 0) {
+                            hData.shootCooldown = 4;
+                            sfx.playHeliGatling();
+                            const gDir = new THREE.Vector3(0, 0, -1).applyEuler(seaSparrow.rotation);
+                            const gOrigin = seaSparrow.position.clone().add(new THREE.Vector3(0, 0.65, 0)).addScaledVector(gDir, 2.5);
+                            spawnBullet(gOrigin, gDir, 0.04);
+                        }
+                    }
+                    if (hData.shootCooldown > 0) hData.shootCooldown--;
+                }
+            }
+
             if (inEnforcer && activeEnforcer) {
                 const eData = activeEnforcer.userData;
                 const maxSpd = isTireBlown ? eData.maxSpeed * 0.4 : eData.maxSpeed;
@@ -3911,7 +4299,19 @@
                 const distToBoat = speedBoat ? player.position.distanceTo(speedBoat.position) : 999;
                 const distToTank = tankRhino ? player.position.distanceTo(tankRhino.position) : 999;
                 const distToBike = bikePCJ ? player.position.distanceTo(bikePCJ.position) : 999;
+                const distToHeli = seaSparrow ? player.position.distanceTo(seaSparrow.position) : 999;
                 let minDistE = 999;
+                swatEnforcers.forEach(e => {
+                    const d = player.position.distanceTo(e.position);
+                    if (d < minDistE) minDistE = d;
+                });
+                if (distToHeli < 6.5) {
+                    vehiclePrompt.innerText = '按 [F] 驾驶 Sea Sparrow 水陆两栖直升机 (W/S 升降，方向键俯冲，左键射击)';
+                    vehiclePrompt.style.display = 'block';
+                } else if (minDistE < 5.5) {
+                    vehiclePrompt.innerText = '按 [F] 强夺并驾驶 SWAT Enforcer 重型防暴装甲车';
+                    vehiclePrompt.style.display = 'block';
+                } else 
                 swatEnforcers.forEach(e => {
                     const d = player.position.distanceTo(e.position);
                     if (d < minDistE) minDistE = d;
@@ -4287,7 +4687,7 @@
                     healthEl.innerText = '100';
                     armorEl.innerText = '100';
                     player.position.set(0, 0, 15);
-                    if (inVehicle || inBoat || inTank || inBike || inTaxi || inEnforcer) toggleVehicle(); isTireBlown = false;
+                    if (inVehicle || inBoat || inTank || inBike || inTaxi || inEnforcer || inHeli) toggleVehicle(); isTireBlown = false;
                     document.getElementById('wasted-screen').style.display = 'none';
                     isDead = false;
                 }, 3500);
@@ -4397,7 +4797,7 @@
             ctx.save();
             ctx.translate(cx, cy);
 
-            const activePos = (inVehicle ? car.position : (inTaxi ? taxiCab.position : (inBike ? bikePCJ.position : player.position)));
+            const activePos = (inHeli && seaSparrow ? seaSparrow.position : (inVehicle ? car.position : (inTaxi ? taxiCab.position : (inBike ? bikePCJ.position : player.position))));
             const angle = inVehicle ? -car.rotation.y : -cameraAngle.yaw;
             ctx.rotate(angle);
 
@@ -4453,6 +4853,20 @@
                 const tkRelZ = (tankRhino.position.z - activePos.z) * 1.5;
                 ctx.fillStyle = '#2d6a4f';
                 ctx.fillRect(tkRelX - 5, tkRelZ - 5, 10, 10);
+            }
+
+            // 🚁 绘制 Sea Sparrow 水陆两栖直升机 (明黄十字旋翼标)
+            if (seaSparrow) {
+                const sRelX = (seaSparrow.position.x - activePos.x) * 1.5;
+                const sRelZ = (seaSparrow.position.z - activePos.z) * 1.5;
+                ctx.fillStyle = '#f39c12';
+                ctx.fillRect(sRelX - 3.5, sRelZ - 3.5, 7, 7);
+                ctx.strokeStyle = '#00f0ff';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(sRelX - 8, sRelZ); ctx.lineTo(sRelX + 8, sRelZ);
+                ctx.moveTo(sRelX, sRelZ - 8); ctx.lineTo(sRelX, sRelZ + 8);
+                ctx.stroke();
             }
 
             // 🚨 绘制 SWAT Enforcer 防暴车 (深蓝战术方块)
