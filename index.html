@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Grand Theft Auto: Vice City - Web 3D (v11.1 - 迈阿密黄金海岸高保真地标重构与程序化真实贴图正式版)</title>
+    <title>Grand Theft Auto: Vice City - Web 3D (v0.12 - PCJ-600 摩托车物理与黄金海岸特技跳跃正式版)</title>
     <style>
         * {
             box-sizing: border-box;
@@ -54,6 +54,41 @@
         }
 
         
+        
+        /* v0.12 特技跳跃奖励横幅 (Unique Stunt Jump Banner) */
+        #stunt-banner {
+            position: absolute;
+            top: 34%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            font-size: 38px;
+            color: #ffe600;
+            text-shadow: 3px 3px 0 #b38600, 0 0 24px rgba(255, 230, 0, 0.95);
+            letter-spacing: 3px;
+            display: none;
+            z-index: 70;
+            pointer-events: none;
+            text-align: center;
+            white-space: nowrap;
+            animation: stuntPulse 2.8s forwards ease-out;
+        }
+        .stunt-reward-sub {
+            font-size: 24px;
+            color: #55c842;
+            text-shadow: 2px 2px 0 #0f3d09, 0 0 16px rgba(85,200,66,0.95);
+            letter-spacing: 2px;
+            margin-top: 8px;
+            white-space: nowrap;
+        }
+        @keyframes stuntPulse {
+            0% { opacity: 0; transform: translate(-50%, -70%) scale(0.7); }
+            12% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+            20% { transform: translate(-50%, -50%) scale(1.0); }
+            85% { opacity: 1; transform: translate(-50%, -50%); }
+            100% { opacity: 0; transform: translate(-50%, -30%) scale(0.9); }
+        }
+
         /* v0.10 经典秘籍激活提示 (Cheat Activated) */
         #cheat-banner {
             position: absolute;
@@ -348,6 +383,12 @@
         </div>
         
         <div id="cheat-banner">CHEAT ACTIVATED!</div>
+
+        <div id="stunt-banner">
+            UNIQUE STUNT JUMP COMPLETED!
+            <div class="stunt-reward-sub" id="stunt-reward-text">DISTANCE: 42M | REWARD: +</div>
+        </div>
+
         <div id="wasted-screen">
             <div class="wasted-text">WASTED</div>
             <div class="wasted-sub">即将就近在 OCEAN BEACH 医院满血重生...</div>
@@ -710,6 +751,42 @@
                 osc.start(now); osc.stop(now + 0.15);
             }
 
+            
+            // 🏍️ v0.12 PCJ-600 高转速 4 缸引擎蜂鸣与特技跳跃号角
+            playBikeEngineRev(speed) {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                const filter = this.ctx.createBiquadFilter();
+                osc.type = 'sawtooth';
+                const baseFreq = 160 + Math.abs(speed) * 440;
+                osc.frequency.setValueAtTime(baseFreq, now);
+                osc.frequency.linearRampToValueAtTime(baseFreq + 75, now + 0.12);
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(baseFreq * 2.2, now);
+                filter.Q.setValueAtTime(3.8, now);
+                gain.gain.setValueAtTime(0.18, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+                osc.connect(filter); filter.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(now); osc.stop(now + 0.12);
+            }
+
+            playStuntFanfare() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now + i * 0.08);
+                    gain.gain.setValueAtTime(0.32, now + i * 0.08);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.45);
+                    osc.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(now + i * 0.08); osc.stop(now + i * 0.08 + 0.45);
+                });
+            }
+
             playDoorSlam() {
                 if (!this.ctx) return;
                 const osc = this.ctx.createOscillator();
@@ -732,6 +809,17 @@
         // --- v0.10 犀牛坦克、秘籍输入、相机晃动与死亡重生系统 ---
         let tankRhino = null;
         let inTank = false;
+
+        // --- v0.12 PCJ-600 仿赛摩托车与特技跳跃系统 ---
+        let bikePCJ = null;
+        let inBike = false;
+        let bikeLean = 0;
+        let bikePitch = 0;
+        const stuntRamps = [];
+        let isStuntJumping = false;
+        let stuntLaunchPos = null;
+        let activeStuntVehicle = null;
+
         let cheatBuffer = "";
         let isDead = false;
         let camTrauma = 0; // 0..1 动态震动创伤值
@@ -809,6 +897,30 @@
 
         
         // ================= v0.11 程序化高保真贴图系统 =================
+        
+        // v0.12 特技跳跃斜坡黄黑警示反光纹理
+        function createHazardStripeTexture() {
+            const c = document.createElement('canvas');
+            c.width = 128; c.height = 128;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#ffe600';
+            ctx.fillRect(0, 0, 128, 128);
+            ctx.fillStyle = '#111111';
+            ctx.beginPath();
+            for (let i = -128; i < 256; i += 32) {
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i + 16, 0);
+                ctx.lineTo(i + 16 + 128, 128);
+                ctx.lineTo(i + 128, 128);
+                ctx.closePath();
+            }
+            ctx.fill();
+            const tex = new THREE.CanvasTexture(c);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(2, 6);
+            return tex;
+        }
+
         function createHawaiianTexture() {
             const c = document.createElement('canvas');
             c.width = 256; c.height = 256;
@@ -981,6 +1093,8 @@
                         createVehicle();
             createRhinoTank(8, -60);
             createDockAndBoat();
+            createBikePCJ(8, 22); // 🏍️ 停靠在 Ocean View 迎宾大道旁的 PCJ-600
+            createStuntRamps();   // 🏁 迈阿密三大经典特技跳跃坡道
 
             // 🌴 v0.11 标志性地标：Ocean View Hotel (罪恶都市经典大饭店)
             const hotelGroup = new THREE.Group();
@@ -1651,6 +1765,194 @@
             setTimeout(() => { banner.style.display = 'none'; }, 2200);
         }
 
+        
+        // ================= v0.12 PCJ-600 经典超级仿赛摩托车 =================
+        function createBikePCJ(x, z) {
+            bikePCJ = new THREE.Group();
+
+            // 1. 哑光黑橡胶轮胎 + 铬合金三辐轮毂
+            const tireGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.22, 18);
+            const tireMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 });
+            const rimGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.24, 12);
+            const rimMat = new THREE.MeshStandardMaterial({ color: 0xdcdde1, metalness: 0.85, roughness: 0.2 });
+
+            // 前轮组
+            const frontWheelGroup = new THREE.Group();
+            const fTire = new THREE.Mesh(tireGeo, tireMat);
+            fTire.rotation.z = Math.PI / 2;
+            fTire.castShadow = true;
+            const fRim = new THREE.Mesh(rimGeo, rimMat);
+            fRim.rotation.z = Math.PI / 2;
+            frontWheelGroup.add(fTire);
+            frontWheelGroup.add(fRim);
+            frontWheelGroup.position.set(0, 0.38, -1.25);
+            bikePCJ.add(frontWheelGroup);
+
+            // 后轮组
+            const rearWheelGroup = new THREE.Group();
+            const rTire = new THREE.Mesh(tireGeo, tireMat);
+            rTire.rotation.z = Math.PI / 2;
+            rTire.castShadow = true;
+            const rRim = new THREE.Mesh(rimGeo, rimMat);
+            rRim.rotation.z = Math.PI / 2;
+            rearWheelGroup.add(rTire);
+            rearWheelGroup.add(rRim);
+            rearWheelGroup.position.set(0, 0.38, 1.25);
+            bikePCJ.add(rearWheelGroup);
+
+            // 2. 前减震器悬挂双立柱 (前倾角度)
+            const forkGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.95, 8);
+            const forkMat = new THREE.MeshStandardMaterial({ color: 0xe0e0e0, metalness: 0.9, roughness: 0.15 });
+            [-0.14, 0.14].forEach(px => {
+                const fork = new THREE.Mesh(forkGeo, forkMat);
+                fork.rotation.x = -0.32;
+                fork.position.set(px, 0.72, -1.05);
+                bikePCJ.add(fork);
+            });
+
+            // 3. 车架与发动机缸体 (Dark Trellis Frame + Quad-Engine)
+            const engineGeo = new THREE.BoxGeometry(0.44, 0.48, 0.85);
+            const engineMat = new THREE.MeshStandardMaterial({ color: 0x2f3640, metalness: 0.8, roughness: 0.4 });
+            const engine = new THREE.Mesh(engineGeo, engineMat);
+            engine.position.set(0, 0.58, 0.05);
+            bikePCJ.add(engine);
+
+            // 4. 标志性 VC 亮青与霓虹粉流线型油箱与整流罩 (Vice City Fairing)
+            const tankGeo = new THREE.BoxGeometry(0.48, 0.42, 0.9);
+            const tankMat = new THREE.MeshStandardMaterial({ color: 0x00d2d3, roughness: 0.25, metalness: 0.7 });
+            const tank = new THREE.Mesh(tankGeo, tankMat);
+            tank.position.set(0, 0.92, -0.2);
+            bikePCJ.add(tank);
+
+            // 油箱粉色拉花条纹
+            const stripeGeo = new THREE.BoxGeometry(0.5, 0.1, 0.88);
+            const stripeMat = new THREE.MeshBasicMaterial({ color: 0xff007f });
+            const stripe = new THREE.Mesh(stripeGeo, stripeMat);
+            stripe.position.set(0, 0.94, -0.2);
+            bikePCJ.add(stripe);
+
+            // 前整流罩与风挡 (Aerodynamic Windshield)
+            const fairingGeo = new THREE.BoxGeometry(0.54, 0.45, 0.5);
+            const fairing = new THREE.Mesh(fairingGeo, tankMat);
+            fairing.position.set(0, 0.95, -0.85);
+            bikePCJ.add(fairing);
+
+            const screenGeo = new THREE.BoxGeometry(0.46, 0.35, 0.08);
+            const screenMat = new THREE.MeshStandardMaterial({ color: 0x112233, transparent: true, opacity: 0.65, roughness: 0.1 });
+            const screen = new THREE.Mesh(screenGeo, screenMat);
+            screen.rotation.x = -0.65;
+            screen.position.set(0, 1.25, -0.92);
+            bikePCJ.add(screen);
+
+            // 5. 分离式低车把 (Clip-on Handlebars) 与后视镜
+            const barGeo = new THREE.CylinderGeometry(0.025, 0.025, 0.78, 8);
+            const barMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.7 });
+            const bar = new THREE.Mesh(barGeo, barMat);
+            bar.rotation.z = Math.PI / 2;
+            bar.position.set(0, 1.05, -0.75);
+            bikePCJ.add(bar);
+
+            // 6. 黑色皮革运动车座 (Tommy 骑乘坐垫)
+            const seatGeo = new THREE.BoxGeometry(0.38, 0.16, 0.92);
+            const seatMat = new THREE.MeshStandardMaterial({ color: 0x1e1e1e, roughness: 0.8 });
+            const seat = new THREE.Mesh(seatGeo, seatMat);
+            seat.position.set(0, 0.86, 0.45);
+            bikePCJ.add(seat);
+
+            // 7. 右侧标志性镀铬高位双排气管 (Twin Chrome Exhausts)
+            const pipeGeo = new THREE.CylinderGeometry(0.065, 0.065, 1.1, 10);
+            const pipeMat = new THREE.MeshStandardMaterial({ color: 0xf5f6fa, metalness: 0.95, roughness: 0.1 });
+            const pipe = new THREE.Mesh(pipeGeo, pipeMat);
+            pipe.rotation.x = 1.35;
+            pipe.position.set(0.28, 0.58, 0.75);
+            bikePCJ.add(pipe);
+
+            // 8. 前卤素大灯与后 LED 刹车灯
+            const headlightGeo = new THREE.BoxGeometry(0.26, 0.14, 0.05);
+            const headlightMat = new THREE.MeshBasicMaterial({ color: 0xffffea });
+            const headlight = new THREE.Mesh(headlightGeo, headlightMat);
+            headlight.position.set(0, 0.95, -1.12);
+            bikePCJ.add(headlight);
+
+            const taillightGeo = new THREE.BoxGeometry(0.22, 0.08, 0.05);
+            const taillightMat = new THREE.MeshBasicMaterial({ color: 0xff0033 });
+            const taillight = new THREE.Mesh(taillightGeo, taillightMat);
+            taillight.position.set(0, 0.92, 0.95);
+            bikePCJ.add(taillight);
+
+            bikePCJ.position.set(x, 0, z);
+            bikePCJ.userData = { speed: 0, maxSpeed: 2.15, accel: 0.034, friction: 0.985, steer: 0, vy: 0, isAirborne: false };
+            scene.add(bikePCJ);
+        }
+
+        // ================= v0.12 黄金海岸经典特技跳跃坡道 =================
+        function createStuntRamps() {
+            const hazardTex = createHazardStripeTexture();
+
+            // 单个特技坡道建造函数
+            function buildRamp(x, z, rotY, name) {
+                const rampGroup = new THREE.Group();
+                const rampLength = 9.0;
+                const rampWidth = 5.2;
+                const rampHeight = 2.4;
+
+                // 斜坡坡面 (倾角约 15度)
+                const slopeGeo = new THREE.BoxGeometry(rampWidth, 0.25, Math.hypot(rampLength, rampHeight));
+                const slopeMat = new THREE.MeshStandardMaterial({ map: hazardTex, roughness: 0.6 });
+                const slope = new THREE.Mesh(slopeGeo, slopeMat);
+                slope.rotation.x = -Math.atan2(rampHeight, rampLength);
+                slope.position.set(0, rampHeight * 0.5, 0);
+                slope.castShadow = true;
+                slope.receiveShadow = true;
+                rampGroup.add(slope);
+
+                // 钢结构三角支撑侧板
+                const frameMat = new THREE.MeshStandardMaterial({ color: 0x2d3436, metalness: 0.8, roughness: 0.3 });
+                [-rampWidth * 0.5, rampWidth * 0.5].forEach(sideX => {
+                    const postGeo = new THREE.CylinderGeometry(0.08, 0.08, rampHeight, 6);
+                    const post = new THREE.Mesh(postGeo, frameMat);
+                    post.position.set(sideX, rampHeight * 0.5, rampLength * 0.45);
+                    rampGroup.add(post);
+
+                    const beamGeo = new THREE.BoxGeometry(0.12, 0.12, rampLength);
+                    const beam = new THREE.Mesh(beamGeo, frameMat);
+                    beam.position.set(sideX, 0.1, 0);
+                    rampGroup.add(beam);
+                });
+
+                // 黄色高亮闪烁指示警示灯
+                const lightGeo = new THREE.SphereGeometry(0.18, 8, 8);
+                const lightMat = new THREE.MeshBasicMaterial({ color: 0xffe600 });
+                [-rampWidth * 0.48, rampWidth * 0.48].forEach(lx => {
+                    const bl = new THREE.Mesh(lightGeo, lightMat);
+                    bl.position.set(lx, rampHeight + 0.1, rampLength * 0.48);
+                    rampGroup.add(bl);
+                });
+
+                rampGroup.position.set(x, 0, z);
+                rampGroup.rotation.y = rotY;
+                scene.add(rampGroup);
+
+                stuntRamps.push({
+                    name: name,
+                    group: rampGroup,
+                    pos: new THREE.Vector3(x, 0, z),
+                    rotY: rotY,
+                    launchDir: new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), rotY),
+                    length: rampLength,
+                    width: rampWidth,
+                    height: rampHeight
+                });
+            }
+
+            // 1. 迈阿密海滩沿岸飞跃坡道 (面向海滩与沙丘)
+            buildRamp(24, 45, 0, "Ocean Beach Dunes Jump");
+            // 2. 华盛顿街高保真巷道冲刺坡道
+            buildRamp(-18, -32, Math.PI * 0.5, "Washington Alley Speed Jump");
+            // 3. 黄金大道南部交叉路口飞跃坡道
+            buildRamp(8, 105, Math.PI, "South Boulevard Cross Jump");
+        }
+
         function createVehicle() {
             // 经典超跑 Infernus (车身流线型与尾翼)
             car = new THREE.Group();
@@ -1943,9 +2245,17 @@
             const distToCar = player.position.distanceTo(car.position);
             const distToBoat = speedBoat ? player.position.distanceTo(speedBoat.position) : 999;
             const distToTank = tankRhino ? player.position.distanceTo(tankRhino.position) : 999;
+            const distToBike = bikePCJ ? player.position.distanceTo(bikePCJ.position) : 999;
 
-            if (!inVehicle && !inBoat && !inTank) {
-                if (distToTank < 6.5) {
+            if (!inVehicle && !inBoat && !inTank && !inBike) {
+                if (distToBike < 4.8) {
+                    inBike = true;
+                    sfx.playDoorSlam();
+                    document.getElementById("speedo-box").style.display = "block";
+                    vehiclePrompt.style.display = 'none';
+                    // 🏍️ Tommy 跨骑在 PCJ-600 上，保持角色可见
+                    player.visible = true;
+                } else if (distToTank < 6.5) {
                     inTank = true;
                     sfx.playDoorSlam();
                     document.getElementById("speedo-box").style.display = "block";
@@ -1964,6 +2274,13 @@
                     player.visible = false;
                     vehiclePrompt.style.display = 'none';
                 }
+            } else if (inBike) {
+                inBike = false;
+                sfx.playDoorSlam();
+                document.getElementById("speedo-box").style.display = "none";
+                player.visible = true;
+                player.position.set(bikePCJ.position.x - 1.8, 0, bikePCJ.position.z);
+                player.rotation.set(0, bikePCJ.rotation.y, 0);
             } else if (inTank) {
                 inTank = false;
                 sfx.playDoorSlam();
@@ -2008,7 +2325,61 @@
                 const offset = new THREE.Vector3(0, 3.2, 7.5).applyAxisAngle(new THREE.Vector3(0, 1, 0), car.rotation.y);
                 camera.position.lerp(car.position.clone().add(offset), 0.12);
                 camera.lookAt(car.position.clone().add(new THREE.Vector3(0, 1.2, 0)));
-            } else {
+            }
+
+            // 🏍️ v0.12 PCJ-600 摩托车物理与双轮压弯动力学
+            if (inBike && bikePCJ) {
+                const bikeData = bikePCJ.userData;
+                if (keys['KeyW'] || keys['ArrowUp']) bikeData.speed = Math.min(bikeData.maxSpeed, bikeData.speed + bikeData.accel);
+                if (keys['KeyS'] || keys['ArrowDown']) bikeData.speed = Math.max(-bikeData.maxSpeed * 0.35, bikeData.speed - bikeData.accel * 1.4);
+
+                // 转向物理 (随速度动态调整灵敏度)
+                const steerSpeedFactor = Math.min(1.0, Math.max(0.25, Math.abs(bikeData.speed) / 0.8));
+                let steerDir = 0;
+                if (keys['KeyA'] || keys['ArrowLeft']) steerDir = 1;
+                if (keys['KeyD'] || keys['ArrowRight']) steerDir = -1;
+
+                bikePCJ.rotation.y += 0.045 * steerDir * (bikeData.speed >= 0 ? 1 : -1) * steerSpeedFactor;
+
+                // 标志性压弯侧倾 (Lean into turn)
+                const targetLean = steerDir * 0.42 * Math.min(1.0, Math.abs(bikeData.speed) / 0.5);
+                bikeLean = THREE.MathUtils.lerp(bikeLean, targetLean, 0.16);
+                bikePCJ.rotation.z = bikeLean;
+
+                // 抬头加速 (Wheelie) 与急刹翘尾 (Stoppie)
+                let targetPitch = 0;
+                if ((keys['ShiftLeft'] || keys['ShiftRight']) && bikeData.speed > 0.35) {
+                    targetPitch = 0.38; // 翘头飞驰
+                } else if ((keys['KeyS'] || keys['ArrowDown']) && bikeData.speed > 0.6) {
+                    targetPitch = -0.22; // 刹车翘后轮
+                }
+                bikePitch = THREE.MathUtils.lerp(bikePitch, targetPitch, 0.12);
+                bikePCJ.rotation.x = bikePitch;
+
+                // 阻尼与位移
+                bikeData.speed *= bikeData.friction;
+                bikePCJ.translateZ(-bikeData.speed);
+
+                // 引擎音效
+                if (keys['KeyW'] || keys['ArrowUp'] || keys['KeyS'] || keys['ArrowDown']) {
+                    if (Math.random() < 0.32) sfx.playBikeEngineRev(bikeData.speed);
+                }
+                const speedMph = Math.round(Math.abs(bikeData.speed) * 95);
+                document.getElementById('speedo-val').innerText = speedMph;
+
+                // Tommy 跨骑骑姿 (身体前倾，双手紧握车把)
+                player.position.copy(bikePCJ.position);
+                player.position.y += 0.38;
+                player.rotation.y = bikePCJ.rotation.y;
+                player.rotation.z = bikePCJ.rotation.z;
+                player.rotation.x = bikePCJ.rotation.x + 0.32;
+
+                // 第三人称紧跟运动相机视角
+                const offset = new THREE.Vector3(0, 2.4, 5.6).applyAxisAngle(new THREE.Vector3(0, 1, 0), bikePCJ.rotation.y);
+                camera.position.lerp(bikePCJ.position.clone().add(offset), 0.16);
+                camera.lookAt(bikePCJ.position.clone().add(new THREE.Vector3(0, 1.1, 0)));
+            }
+ else {
                 // 步行移动与控制逻辑
                 const moveSpeed = (keys['ShiftLeft'] ? 0.32 : 0.16);
                 let moveDir = new THREE.Vector3(0, 0, 0);
@@ -2025,11 +2396,15 @@
                     player.rotation.y = Math.atan2(moveDir.x, moveDir.z);
                 }
 
-                // 检测靠近车辆、快艇或主战坦克
+                // 检测靠近车辆、快艇、PCJ-600 摩托车或主战坦克
                 const distToCar = player.position.distanceTo(car.position);
                 const distToBoat = speedBoat ? player.position.distanceTo(speedBoat.position) : 999;
                 const distToTank = tankRhino ? player.position.distanceTo(tankRhino.position) : 999;
-                if (distToTank < 6.5) {
+                const distToBike = bikePCJ ? player.position.distanceTo(bikePCJ.position) : 999;
+                if (distToBike < 4.8) {
+                    vehiclePrompt.innerText = '按 [F] 或 [Enter] 跨骑 PCJ-600 超级仿赛摩托车';
+                    vehiclePrompt.style.display = 'block';
+                } else if (distToTank < 6.5) {
                     vehiclePrompt.innerText = '按 [F] 或 [Enter] 驾驶犀牛主战坦克 Rhino (左键炮击)';
                     vehiclePrompt.style.display = 'block';
                 } else if (distToCar < 5.0) {
@@ -2335,10 +2710,69 @@
                     healthEl.innerText = '100';
                     armorEl.innerText = '100';
                     player.position.set(0, 0, 15);
-                    if (inVehicle || inBoat || inTank) toggleVehicle();
+                    if (inVehicle || inBoat || inTank || inBike) toggleVehicle();
                     document.getElementById('wasted-screen').style.display = 'none';
                     isDead = false;
                 }, 3500);
+            }
+
+
+            // 🏁 v0.12 迈阿密黄金海岸特技跳跃系统 (Unique Stunt Jumps)
+            const currentDriveVehicle = inBike ? bikePCJ : (inVehicle ? car : null);
+            if (currentDriveVehicle) {
+                const vData = currentDriveVehicle.userData;
+                const vSpeed = Math.abs(vData.speed || 0);
+
+                // 检测是否冲上任一特技斜坡高台
+                if (!isStuntJumping) {
+                    stuntRamps.forEach(ramp => {
+                        const distToRamp = currentDriveVehicle.position.distanceTo(ramp.pos);
+                        if (distToRamp < 6.8 && vSpeed > 0.55) {
+                            // 检查行进方向是否朝向坡道起跳方向
+                            const moveDir = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), currentDriveVehicle.rotation.y);
+                            const dot = moveDir.dot(ramp.launchDir);
+                            if (dot > 0.35) {
+                                // 满足特技起跳触发条件！
+                                isStuntJumping = true;
+                                activeStuntVehicle = currentDriveVehicle;
+                                vData.vy = vSpeed * 1.55 + 0.36;
+                                stuntLaunchPos = currentDriveVehicle.position.clone();
+                                camTrauma = 0.5; // 起跳震颤
+                            }
+                        }
+                    });
+                }
+
+                // 滞空空中物理与慢动作特技运镜
+                if (isStuntJumping && activeStuntVehicle === currentDriveVehicle) {
+                    currentDriveVehicle.position.y += vData.vy;
+                    vData.vy -= 0.022; // 重力加速度
+
+                    // 滞空慢动作电影级跟踪视角 (低角度仰拍)
+                    camera.position.y = Math.max(1.2, camera.position.y * 0.96);
+
+                    // 落地检测
+                    if (currentDriveVehicle.position.y <= 0) {
+                        currentDriveVehicle.position.y = 0;
+                        vData.vy = 0;
+                        isStuntJumping = false;
+
+                        // 计算飞跃距离
+                        const jumpDist = currentDriveVehicle.position.distanceTo(stuntLaunchPos);
+                        if (jumpDist > 16.0) {
+                            // 达成特技跳跃！
+                            sfx.playStuntFanfare();
+                            playerMoney += 500;
+                            document.querySelector('.vc-money').innerText = '$' + playerMoney.toString().padStart(8, '0');
+                            
+                            const banner = document.getElementById('stunt-banner');
+                            const subText = document.getElementById('stunt-reward-text');
+                            if (subText) subText.innerText = `DISTANCE: ${Math.round(jumpDist)}M | REWARD: +$500`;
+                            banner.style.display = 'block';
+                            setTimeout(() => { banner.style.display = 'none'; }, 2800);
+                        }
+                    }
+                }
             }
 
             // 更新小地图雷达
@@ -2419,6 +2853,33 @@
                 ctx.fillStyle = '#2d6a4f';
                 ctx.fillRect(tkRelX - 5, tkRelZ - 5, 10, 10);
             }
+
+            // 🏍️ 绘制 PCJ-600 摩托车标记 (亮青色高亮圆环)
+            if (bikePCJ) {
+                const bRelX = (bikePCJ.position.x - activePos.x) * 1.5;
+                const bRelZ = (bikePCJ.position.z - activePos.z) * 1.5;
+                ctx.fillStyle = '#00d2d3';
+                ctx.beginPath();
+                ctx.arc(bRelX, bRelZ, 4.5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            }
+
+            // 🏁 绘制三大特技跳跃坡道 (黄色菱形标记)
+            stuntRamps.forEach(ramp => {
+                const rRelX = (ramp.pos.x - activePos.x) * 1.5;
+                const rRelZ = (ramp.pos.z - activePos.z) * 1.5;
+                ctx.fillStyle = '#ffe600';
+                ctx.beginPath();
+                ctx.moveTo(rRelX, rRelZ - 5);
+                ctx.lineTo(rRelX + 5, rRelZ);
+                ctx.lineTo(rRelX, rRelZ + 5);
+                ctx.lineTo(rRelX - 5, rRelZ);
+                ctx.closePath();
+                ctx.fill();
+            });
 
             ctx.fillStyle = '#ff4193';
             ctx.fillRect(carRelX - 4, carRelZ - 4, 8, 8);
