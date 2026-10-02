@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Grand Theft Auto: Vice City - Web 3D (v0.15 - Malibu Club 玛里布夜总会地标、动感舞池与夜生活鸡尾酒系统)</title>
+    <title>Grand Theft Auto: Vice City - Web 3D (v0.16 - SWAT 特警部队、重型 Enforcer 防暴车与路障钉刺系统)</title>
     <style>
         * {
             box-sizing: border-box;
@@ -58,6 +58,46 @@
         
         
         
+        
+        /* v0.16 SWAT 路障与爆胎警报 HUD */
+        #roadblock-warning {
+            position: absolute;
+            top: 20%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            font-size: 32px;
+            color: #ff3838;
+            text-shadow: 2px 2px 0 #000, 0 0 20px rgba(255, 56, 56, 0.9);
+            letter-spacing: 2px;
+            display: none;
+            z-index: 70;
+            pointer-events: none;
+            text-align: center;
+            white-space: nowrap;
+            animation: roadPulse 1.8s infinite alternate;
+        }
+        #puncture-banner {
+            position: absolute;
+            top: 36%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            font-size: 30px;
+            color: #ffe600;
+            text-shadow: 2px 2px 0 #b38600, 0 0 18px rgba(255, 230, 0, 0.95);
+            letter-spacing: 2px;
+            display: none;
+            z-index: 70;
+            pointer-events: none;
+            text-align: center;
+            white-space: nowrap;
+        }
+        @keyframes roadPulse {
+            0% { transform: translate(-50%, -50%) scale(0.95); color: #ff3838; }
+            100% { transform: translate(-50%, -50%) scale(1.05); color: #00d2d3; }
+        }
+
         /* v0.15 Malibu Club 夜总会横幅与微醺鸡尾酒光晕 */
         #tipsy-overlay {
             position: absolute;
@@ -578,6 +618,11 @@
         
     
     
+    
+    <!-- v0.16 SWAT 警方路障与爆胎警告横幅 -->
+    <div id="roadblock-warning">⚠️ VCPD SWAT 战术特警路障已部署：前方钉刺带 ⚠️</div>
+    <div id="puncture-banner">💥 轮胎已被钉刺带刺破！车辆牵引力丧失，极速剧降 (-60%) 💥</div>
+
     <!-- v0.15 玛里布夜总会鸡尾酒微醺遮罩与横幅 -->
     <div id="tipsy-overlay"></div>
     <div id="malibu-banner">MALIBU CLUB: 享受了一杯冰镇迈阿密鸡尾酒! 生命值已满格 (❤️ 100) (-$50)</div>
@@ -996,6 +1041,56 @@
             
             
             
+            
+            // 🚨 v0.16 SWAT 防暴警笛与钉刺爆胎音效
+            playTirePop() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                // 刺破高压空气喷发白噪
+                const bufferSize = Math.floor(this.ctx.sampleRate * 0.4);
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.08));
+                }
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'highpass';
+                filter.frequency.setValueAtTime(1800, now);
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.85, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                noise.connect(filter); filter.connect(gain); gain.connect(this.ctx.destination);
+                noise.start(now);
+
+                // 轮圈接地金属摩擦声
+                const osc = this.ctx.createOscillator();
+                const oGain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(180, now);
+                osc.frequency.exponentialRampToValueAtTime(50, now + 0.25);
+                oGain.gain.setValueAtTime(0.5, now);
+                oGain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                osc.connect(oGain); oGain.connect(this.ctx.destination);
+                osc.start(now); osc.stop(now + 0.25);
+            }
+
+            playSirenWail() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(600, now);
+                osc.frequency.linearRampToValueAtTime(1100, now + 0.35);
+                osc.frequency.linearRampToValueAtTime(600, now + 0.7);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.7);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(now); osc.stop(now + 0.7);
+            }
+
             // 🍸 v0.15 玛里布夜总会 80s 四四拍迪斯科舞曲与鸡尾酒音效
             playDiscoMusicBeat() {
                 if (!this.ctx) return;
@@ -1212,6 +1307,16 @@
         // --- v0.14 Ammu-Nation 军火商店与狙击瞄准系统 ---
         
         // --- v0.15 Malibu Club 玛里布夜总会与动感舞池状态 ---
+        
+        // --- v0.16 SWAT 特警部队与路障钉刺带系统 ---
+        const swatEnforcers = [];
+        const spikeStrips = [];
+        const swatOfficers = [];
+        let inEnforcer = false;
+        let isTireBlown = false;
+        let activeEnforcer = null;
+        let roadblockActive = false;
+
         let malibuClubGroup = null;
         let malibuBarBeacon = null;
         const danceTiles = [];
@@ -1545,6 +1650,7 @@
             createKaufmanTaxi(-8, 14); // 🚕 停靠在黄金大道的 Kaufman 经典出租车
             createAmmuNationStore();   // 🎯 经典军火商行 Ammu-Nation
             createMalibuClub();         // 🍸 经典夜总会 Malibu Club 玛里布俱乐部
+            deploySWATRoadblock(-40);   // 🚨 部署主干道 SWAT 特警路障与钉刺带
 
             // 🌴 v0.11 标志性地标：Ocean View Hotel (罪恶都市经典大饭店)
             const hotelGroup = new THREE.Group();
@@ -2677,6 +2783,164 @@
         // ================= v0.14 经典军火商行 Ammu-Nation 地标 =================
         
         // ================= v0.15 经典夜总会 Malibu Club 玛里布俱乐部 =================
+        
+        // ================= v0.16 SWAT 特警部队与重型 Enforcer 防暴装甲车 =================
+        function createSWATEnforcer(x, z, rotY = 0) {
+            const enforcer = new THREE.Group();
+
+            // 1. 重型装甲底盘 (深战术蓝黑色高刚性钢板)
+            const bodyGeo = new THREE.BoxGeometry(2.7, 1.1, 5.6);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x192a56, roughness: 0.5, metalness: 0.6 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 0.85;
+            body.castShadow = true;
+            enforcer.add(body);
+
+            // 2. 车头重型防暴防撞钢质撞角 (Heavy Bull-bar / Ram Bumper)
+            const ramGeo = new THREE.BoxGeometry(2.8, 0.6, 0.4);
+            const ramMat = new THREE.MeshStandardMaterial({ color: 0x2f3640, metalness: 0.9, roughness: 0.2 });
+            const ram = new THREE.Mesh(ramGeo, ramMat);
+            ram.position.set(0, 0.65, -2.95);
+            enforcer.add(ram);
+
+            // 3. 防弹铁丝网装甲驾驶室
+            const cabinGeo = new THREE.BoxGeometry(2.4, 0.85, 3.2);
+            const cabinMat = new THREE.MeshStandardMaterial({ color: 0x0c1020, roughness: 0.3 });
+            const cabin = new THREE.Mesh(cabinGeo, cabinMat);
+            cabin.position.set(0, 1.7, -0.2);
+            cabin.castShadow = true;
+            enforcer.add(cabin);
+
+            // 4. 车身两侧白色 "VCPD S.W.A.T." 战术警用标识板
+            const signMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            [-1.36, 1.36].forEach(sx => {
+                const sGeo = new THREE.BoxGeometry(0.04, 0.35, 2.2);
+                const sMesh = new THREE.Mesh(sGeo, signMat);
+                sMesh.position.set(sx, 1.1, 0.2);
+                enforcer.add(sMesh);
+            });
+
+            // 5. 车顶双高亮红蓝旋转防暴爆闪警灯
+            const strobeGroup = new THREE.Group();
+            const strobeBase = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.15, 0.4), new THREE.MeshStandardMaterial({ color: 0x111111 }));
+            strobeGroup.add(strobeBase);
+
+            const redStrobe = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.22, 0.3), new THREE.MeshBasicMaterial({ color: 0xff0033 }));
+            redStrobe.position.x = -0.5;
+            strobeGroup.add(redStrobe);
+
+            const blueStrobe = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.22, 0.3), new THREE.MeshBasicMaterial({ color: 0x00d2d3 }));
+            blueStrobe.position.x = 0.5;
+            strobeGroup.add(blueStrobe);
+
+            strobeGroup.position.set(0, 2.2, -0.4);
+            enforcer.add(strobeGroup);
+
+            // 6. 重型越野全地形高扁平比防弹大轮胎
+            const wheelGeo = new THREE.CylinderGeometry(0.52, 0.52, 0.42, 16);
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+            const wheelOffsets = [
+                [-1.4, 0.52, 1.7],
+                [1.4, 0.52, 1.7],
+                [-1.4, 0.52, -1.7],
+                [1.4, 0.52, -1.7]
+            ];
+            wheelOffsets.forEach(pos => {
+                const w = new THREE.Mesh(wheelGeo, wheelMat);
+                w.rotation.z = Math.PI / 2;
+                w.position.set(...pos);
+                w.castShadow = true;
+                enforcer.add(w);
+            });
+
+            enforcer.position.set(x, 0, z);
+            enforcer.rotation.y = rotY;
+            enforcer.userData = {
+                speed: 0,
+                maxSpeed: 1.55,
+                accel: 0.02,
+                friction: 0.98,
+                strobeGroup,
+                strobeTimer: 0,
+                isSWAT: true
+            };
+            scene.add(enforcer);
+            swatEnforcers.push(enforcer);
+            return enforcer;
+        }
+
+        // ================= 经典路障金属钉刺带 Spike Strip =================
+        function createSpikeStrip(x, z, rotY = 0) {
+            const stripGroup = new THREE.Group();
+
+            // 黑色折叠铰链格栅底座
+            const baseGeo = new THREE.BoxGeometry(8.5, 0.08, 0.65);
+            const baseMat = new THREE.MeshStandardMaterial({ color: 0x2f3640, roughness: 0.8 });
+            const base = new THREE.Mesh(baseGeo, baseMat);
+            base.position.y = 0.04;
+            stripGroup.add(base);
+
+            // 银色高密度锋利空心钉刺
+            const spikeGeo = new THREE.ConeGeometry(0.06, 0.32, 6);
+            const spikeMat = new THREE.MeshStandardMaterial({ color: 0xdcdde1, metalness: 0.9, roughness: 0.2 });
+            for (let i = -4.0; i <= 4.0; i += 0.4) {
+                [-0.18, 0.18].forEach(oz => {
+                    const spike = new THREE.Mesh(spikeGeo, spikeMat);
+                    spike.position.set(i + (Math.random() - 0.5) * 0.1, 0.2, oz);
+                    stripGroup.add(spike);
+                });
+            }
+
+            stripGroup.position.set(x, 0, z);
+            stripGroup.rotation.y = rotY;
+            scene.add(stripGroup);
+
+            spikeStrips.push({
+                group: stripGroup,
+                pos: new THREE.Vector3(x, 0, z),
+                width: 8.5
+            });
+            return stripGroup;
+        }
+
+        // 部署 SWAT 战术特警路障封锁线
+        function deploySWATRoadblock(zPos = -40) {
+            roadblockActive = true;
+            // 两辆重型 Enforcer 呈 30 度角左右夹角封锁道路
+            createSWATEnforcer(-7.5, zPos, 0.45);
+            createSWATEnforcer(7.5, zPos, -0.45);
+
+            // 中间铺设贯穿车道的致命钉刺带
+            createSpikeStrip(0, zPos - 1.5, 0);
+
+            // 部署 2 名重装 SWAT 战术特警
+            [-4.5, 4.5].forEach((sx, i) => {
+                const swatGroup = new THREE.Group();
+                const sBodyGeo = new THREE.BoxGeometry(0.8, 1.15, 0.45);
+                const sBodyMat = new THREE.MeshStandardMaterial({ color: 0x192a56 }); // 深蓝战术防弹背心
+                const sBody = new THREE.Mesh(sBodyGeo, sBodyMat);
+                sBody.position.y = 1.05;
+                swatGroup.add(sBody);
+
+                // 黑色战术防暴头盔
+                const sHeadGeo = new THREE.BoxGeometry(0.52, 0.52, 0.52);
+                const sHeadMat = new THREE.MeshStandardMaterial({ color: 0x1e272e, roughness: 0.4 });
+                const sHead = new THREE.Mesh(sHeadGeo, sHeadMat);
+                sHead.position.y = 1.86;
+                swatGroup.add(sHead);
+
+                // 手持黑色 UZI 战术戒备
+                const uziGeo = new THREE.BoxGeometry(0.18, 0.25, 0.65);
+                const uziMesh = new THREE.Mesh(uziGeo, new THREE.MeshBasicMaterial({ color: 0x111111 }));
+                uziMesh.position.set(0.42, 1.25, -0.35);
+                swatGroup.add(uziMesh);
+
+                swatGroup.position.set(sx, 0, zPos + (i === 0 ? -3.5 : 3.5));
+                scene.add(swatGroup);
+                swatOfficers.push(swatGroup);
+            });
+        }
+
         function createMalibuClub() {
             malibuClubGroup = new THREE.Group();
 
@@ -3322,7 +3586,22 @@
             const distToTaxi = taxiCab ? player.position.distanceTo(taxiCab.position) : 999;
 
             if (!inVehicle && !inBoat && !inTank && !inBike && !inTaxi) {
-                if (distToTaxi < 5.2) {
+                // 检查是否靠近 SWAT Enforcer 防暴装甲车
+                let nearestEnforcer = null;
+                let minDistE = 999;
+                swatEnforcers.forEach(e => {
+                    const d = player.position.distanceTo(e.position);
+                    if (d < minDistE) { minDistE = d; nearestEnforcer = e; }
+                });
+
+                if (minDistE < 5.5 && nearestEnforcer) {
+                    inEnforcer = true;
+                    activeEnforcer = nearestEnforcer;
+                    sfx.playDoorSlam();
+                    document.getElementById("speedo-box").style.display = "block";
+                    player.visible = false;
+                    vehiclePrompt.style.display = 'none';
+                } else if (distToTaxi < 5.2) {
                     inTaxi = true;
                     sfx.playDoorSlam();
                     document.getElementById("speedo-box").style.display = "block";
@@ -3353,6 +3632,13 @@
                     player.visible = false;
                     vehiclePrompt.style.display = 'none';
                 }
+            } else if (inEnforcer && activeEnforcer) {
+                inEnforcer = false;
+                sfx.playDoorSlam();
+                document.getElementById("speedo-box").style.display = "none";
+                player.visible = true;
+                player.position.set(activeEnforcer.position.x - 2.8, 0, activeEnforcer.position.z);
+                activeEnforcer = null;
             } else if (inTaxi) {
                 inTaxi = false;
                 if (taxiMissionActive) toggleTaxiMission(); // 下车自动结算/退出出租车任务
@@ -3490,6 +3776,66 @@
             }
 
             // 🚕 出租车营运支线任务状态轮询
+            
+            // 🚨 v0.16 SWAT Enforcer 防暴装甲车驾驶物理
+            if (inEnforcer && activeEnforcer) {
+                const eData = activeEnforcer.userData;
+                const maxSpd = isTireBlown ? eData.maxSpeed * 0.4 : eData.maxSpeed;
+                if (keys['KeyW'] || keys['ArrowUp']) eData.speed = Math.min(maxSpd, eData.speed + eData.accel);
+                if (keys['KeyS'] || keys['ArrowDown']) eData.speed = Math.max(-maxSpd * 0.4, eData.speed - eData.accel);
+                if (keys['KeyA'] || keys['ArrowLeft']) activeEnforcer.rotation.y += (isTireBlown ? 0.045 : 0.025) * (eData.speed >= 0 ? 1 : -1);
+                if (keys['KeyD'] || keys['ArrowRight']) activeEnforcer.rotation.y -= (isTireBlown ? 0.045 : 0.025) * (eData.speed >= 0 ? 1 : -1);
+
+                eData.speed *= (isTireBlown ? 0.95 : eData.friction);
+                activeEnforcer.translateZ(-eData.speed);
+
+                if (keys['KeyW'] || keys['ArrowUp'] || keys['KeyS'] || keys['ArrowDown']) {
+                    if (Math.random() < 0.25) sfx.playEngineRev(eData.speed * 0.85);
+                }
+                const speedMph = Math.round(Math.abs(eData.speed) * 75);
+                document.getElementById('speedo-val').innerText = speedMph;
+
+                // 装甲车重型冲撞摧毁民用车与警车
+                trafficCars.forEach(tc => {
+                    if (activeEnforcer.position.distanceTo(tc.position) < 4.0) {
+                        triggerExplosion(tc.position.clone(), 6.5);
+                    }
+                });
+
+                // 第三人称追尾视角
+                const offset = new THREE.Vector3(0, 3.8, 8.8).applyAxisAngle(new THREE.Vector3(0, 1, 0), activeEnforcer.rotation.y);
+                camera.position.lerp(activeEnforcer.position.clone().add(offset), 0.14);
+                camera.lookAt(activeEnforcer.position.clone().add(new THREE.Vector3(0, 1.4, 0)));
+            }
+
+            // SWAT 警灯闪烁与警笛
+            swatEnforcers.forEach(enf => {
+                enf.userData.strobeTimer += 0.12;
+                enf.userData.strobeGroup.children[1].visible = Math.sin(enf.userData.strobeTimer * 12) > 0;
+                enf.userData.strobeGroup.children[2].visible = Math.sin(enf.userData.strobeTimer * 12) <= 0;
+            });
+
+            // ⚠️ 钉刺带碰撞判定 (Spike Strip Detection)
+            const drivenVeh = (inEnforcer ? activeEnforcer : (inTaxi ? taxiCab : (inBike ? bikePCJ : (inVehicle ? car : null))));
+            if (drivenVeh && !isTireBlown) {
+                spikeStrips.forEach(spike => {
+                    if (drivenVeh.position.distanceTo(spike.pos) < 4.5) {
+                        isTireBlown = true;
+                        sfx.playTirePop();
+                        camTrauma = 0.65;
+                        const pBanner = document.getElementById('puncture-banner');
+                        pBanner.style.display = 'block';
+                        setTimeout(() => { pBanner.style.display = 'none'; }, 3000);
+                    }
+                });
+            }
+
+            // 通缉度达到 3 星以上时显示 SWAT 路障警告
+            const roadWarn = document.getElementById('roadblock-warning');
+            if (roadWarn) {
+                roadWarn.style.display = (wantedLevel >= 3 ? 'block' : 'none');
+            }
+
             if (inTaxi && taxiMissionActive && taxiCab) {
                 const tSpeed = Math.abs(taxiCab.userData.speed);
 
@@ -3565,7 +3911,15 @@
                 const distToBoat = speedBoat ? player.position.distanceTo(speedBoat.position) : 999;
                 const distToTank = tankRhino ? player.position.distanceTo(tankRhino.position) : 999;
                 const distToBike = bikePCJ ? player.position.distanceTo(bikePCJ.position) : 999;
-                if (distToTaxi < 5.2) {
+                let minDistE = 999;
+                swatEnforcers.forEach(e => {
+                    const d = player.position.distanceTo(e.position);
+                    if (d < minDistE) minDistE = d;
+                });
+                if (minDistE < 5.5) {
+                    vehiclePrompt.innerText = '按 [F] 强夺并驾驶 SWAT Enforcer 重型防暴装甲车';
+                    vehiclePrompt.style.display = 'block';
+                } else if (distToTaxi < 5.2) {
                     vehiclePrompt.innerText = '按 [F] 驾驶 Kaufman Cabs 复古出租车 (按 [T] 拉客 / [H] 鸣笛)';
                     vehiclePrompt.style.display = 'block';
                 } else if (distToBike < 4.8) {
@@ -3933,7 +4287,7 @@
                     healthEl.innerText = '100';
                     armorEl.innerText = '100';
                     player.position.set(0, 0, 15);
-                    if (inVehicle || inBoat || inTank || inBike || inTaxi) toggleVehicle();
+                    if (inVehicle || inBoat || inTank || inBike || inTaxi || inEnforcer) toggleVehicle(); isTireBlown = false;
                     document.getElementById('wasted-screen').style.display = 'none';
                     isDead = false;
                 }, 3500);
@@ -4100,6 +4454,25 @@
                 ctx.fillStyle = '#2d6a4f';
                 ctx.fillRect(tkRelX - 5, tkRelZ - 5, 10, 10);
             }
+
+            // 🚨 绘制 SWAT Enforcer 防暴车 (深蓝战术方块)
+            swatEnforcers.forEach(enf => {
+                const eRelX = (enf.position.x - activePos.x) * 1.5;
+                const eRelZ = (enf.position.z - activePos.z) * 1.5;
+                ctx.fillStyle = '#192a56';
+                ctx.fillRect(eRelX - 5, eRelZ - 5, 10, 10);
+                ctx.strokeStyle = '#00f0ff';
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(eRelX - 5, eRelZ - 5, 10, 10);
+            });
+
+            // ⚠️ 绘制钉刺带警用封锁标志 (红色警示横条)
+            spikeStrips.forEach(sp => {
+                const sRelX = (sp.pos.x - activePos.x) * 1.5;
+                const sRelZ = (sp.pos.z - activePos.z) * 1.5;
+                ctx.fillStyle = '#ff3838';
+                ctx.fillRect(sRelX - 8, sRelZ - 2, 16, 4);
+            });
 
             // 🍸 绘制 Malibu Club 夜总会标记 (粉紫高亮鸡尾酒杯图标)
             if (malibuClubGroup) {
