@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Grand Theft Auto: Vice City - Web 3D (v0.14 - Ammu-Nation 军火商行、火焰喷射器与高精狙击系统)</title>
+    <title>Grand Theft Auto: Vice City - Web 3D (v0.15 - Malibu Club 玛里布夜总会地标、动感舞池与夜生活鸡尾酒系统)</title>
     <style>
         * {
             box-sizing: border-box;
@@ -57,6 +57,47 @@
         
         
         
+        
+        /* v0.15 Malibu Club 夜总会横幅与微醺鸡尾酒光晕 */
+        #tipsy-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(255, 0, 128, 0.25) 0%, rgba(128, 0, 255, 0.45) 100%);
+            mix-blend-mode: screen;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.8s ease-in-out;
+            z-index: 8;
+        }
+
+        #malibu-banner {
+            position: absolute;
+            top: 28%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            font-size: 34px;
+            color: #ff007f;
+            text-shadow: 3px 3px 0 #570832, 0 0 24px rgba(255, 0, 127, 0.95);
+            letter-spacing: 3px;
+            display: none;
+            z-index: 70;
+            pointer-events: none;
+            text-align: center;
+            white-space: nowrap;
+            animation: malibuPulse 2.5s forwards ease-out;
+        }
+        @keyframes malibuPulse {
+            0% { opacity: 0; transform: translate(-50%, -70%) scale(0.8); }
+            15% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+            25% { transform: translate(-50%, -50%) scale(1.0); }
+            80% { opacity: 1; transform: translate(-50%, -50%); }
+            100% { opacity: 0; transform: translate(-50%, -30%); }
+        }
+
         /* v0.14 PSG-1 经典狙击枪开镜光学瞄准镜 */
         #sniper-scope {
             position: absolute;
@@ -536,6 +577,11 @@
 
         
     
+    
+    <!-- v0.15 玛里布夜总会鸡尾酒微醺遮罩与横幅 -->
+    <div id="tipsy-overlay"></div>
+    <div id="malibu-banner">MALIBU CLUB: 享受了一杯冰镇迈阿密鸡尾酒! 生命值已满格 (❤️ 100) (-$50)</div>
+
     <!-- v0.14 经典高精度狙击瞄准镜与军火补给横幅 -->
     <div id="sniper-scope">
         <div class="sniper-crosshair"></div>
@@ -949,6 +995,55 @@
 
             
             
+            
+            // 🍸 v0.15 玛里布夜总会 80s 四四拍迪斯科舞曲与鸡尾酒音效
+            playDiscoMusicBeat() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                // 四四拍电子底鼓 (Kick Drum)
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(140, now);
+                osc.frequency.exponentialRampToValueAtTime(38, now + 0.12);
+                gain.gain.setValueAtTime(0.35, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(now); osc.stop(now + 0.12);
+
+                // 迪斯科踩镲 (Hi-hat)
+                const bSize = Math.floor(this.ctx.sampleRate * 0.05);
+                const buf = this.ctx.createBuffer(1, bSize, this.ctx.sampleRate);
+                const d = buf.getChannelData(0);
+                for (let i = 0; i < bSize; i++) d[i] = (Math.random() * 2 - 1) * 0.3;
+                const src = this.ctx.createBufferSource();
+                src.buffer = buf;
+                const hf = this.ctx.createBiquadFilter();
+                hf.type = 'highpass';
+                hf.frequency.setValueAtTime(7000, now);
+                const hg = this.ctx.createGain();
+                hg.gain.setValueAtTime(0.12, now);
+                hg.gain.exponentialRampToValueAtTime(0.005, now + 0.05);
+                src.connect(hf); hf.connect(hg); hg.connect(this.ctx.destination);
+                src.start(now);
+            }
+
+            playCocktailDrink() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                // 冰块撞击玻璃杯清脆声
+                [1800, 2400, 3100].forEach((freq, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now + i * 0.05);
+                    gain.gain.setValueAtTime(0.2, now + i * 0.05);
+                    gain.gain.exponentialRampToValueAtTime(0.005, now + i * 0.05 + 0.15);
+                    osc.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(now + i * 0.05); osc.stop(now + i * 0.05 + 0.15);
+                });
+            }
+
             // 🔥 v0.14 火焰喷射器、PSG-1 狙击步枪与枪械上膛音效
             playFlamethrower() {
                 if (!this.ctx) return;
@@ -1115,6 +1210,14 @@
         let inTaxi = false;
 
         // --- v0.14 Ammu-Nation 军火商店与狙击瞄准系统 ---
+        
+        // --- v0.15 Malibu Club 玛里布夜总会与动感舞池状态 ---
+        let malibuClubGroup = null;
+        let malibuBarBeacon = null;
+        const danceTiles = [];
+        const clubDancers = [];
+        let discoBeatTimer = 0;
+
         let ammuStoreGroup = null;
         let ammuPickupBeacon = null;
         let isSniperScoped = false;
@@ -1441,6 +1544,7 @@
             createStuntRamps();   // 🏁 迈阿密三大经典特技跳跃坡道
             createKaufmanTaxi(-8, 14); // 🚕 停靠在黄金大道的 Kaufman 经典出租车
             createAmmuNationStore();   // 🎯 经典军火商行 Ammu-Nation
+            createMalibuClub();         // 🍸 经典夜总会 Malibu Club 玛里布俱乐部
 
             // 🌴 v0.11 标志性地标：Ocean View Hotel (罪恶都市经典大饭店)
             const hotelGroup = new THREE.Group();
@@ -2571,6 +2675,167 @@
 
         
         // ================= v0.14 经典军火商行 Ammu-Nation 地标 =================
+        
+        // ================= v0.15 经典夜总会 Malibu Club 玛里布俱乐部 =================
+        function createMalibuClub() {
+            malibuClubGroup = new THREE.Group();
+
+            // 1. 夜总会主建筑体 (80年代热带奢华深紫与粉红配色)
+            const mainGeo = new THREE.BoxGeometry(32, 14, 22);
+            const mainMat = new THREE.MeshStandardMaterial({ color: 0x1f1135, roughness: 0.7 });
+            const mainBuilding = new THREE.Mesh(mainGeo, mainMat);
+            mainBuilding.position.set(0, 7, 0);
+            mainBuilding.castShadow = true;
+            mainBuilding.receiveShadow = true;
+            malibuClubGroup.add(mainBuilding);
+
+            // 2. 迎宾双层弧形门廊与通透霓虹粉紫玻璃大堂
+            const glassGeo = new THREE.BoxGeometry(26, 6, 4.5);
+            const glassMat = new THREE.MeshStandardMaterial({
+                color: 0xff00aa,
+                roughness: 0.1,
+                transparent: true,
+                opacity: 0.65,
+                metalness: 0.3
+            });
+            const glassLobby = new THREE.Mesh(glassGeo, glassMat);
+            glassLobby.position.set(0, 3, 11);
+            malibuClubGroup.add(glassLobby);
+
+            // 3. 屋顶巨型艺术招牌: MALIBU CLUB
+            const signBackGeo = new THREE.BoxGeometry(25, 3.2, 0.5);
+            const signBackMat = new THREE.MeshStandardMaterial({ color: 0x0c0714 });
+            const signBack = new THREE.Mesh(signBackGeo, signBackMat);
+            signBack.position.set(0, 14.5, 11);
+            malibuClubGroup.add(signBack);
+
+            // 霓虹发光文字板块 (Hot Pink Neon)
+            const neonGeo = new THREE.BoxGeometry(23.5, 2.2, 0.3);
+            const neonMat = new THREE.MeshStandardMaterial({
+                color: 0xff007f,
+                emissive: 0xff007f,
+                emissiveIntensity: 0.95
+            });
+            const neonSign = new THREE.Mesh(neonGeo, neonMat);
+            neonSign.position.set(0, 14.5, 11.3);
+            malibuClubGroup.add(neonSign);
+
+            // 左右两侧发光电光青霓虹棕榈树剪影
+            [-13, 13].forEach(px => {
+                const palmGeo = new THREE.CylinderGeometry(0.2, 0.4, 4.2, 6);
+                const palmMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+                const trunk = new THREE.Mesh(palmGeo, palmMat);
+                trunk.position.set(px, 14.5, 11.2);
+                malibuClubGroup.add(trunk);
+
+                const frondGeo = new THREE.ConeGeometry(1.8, 1.2, 6);
+                const frond = new THREE.Mesh(frondGeo, palmMat);
+                frond.position.set(px, 16.6, 11.2);
+                malibuClubGroup.add(frond);
+            });
+
+            // 4. 80s 动感发光迪斯科棋盘舞池 (Neon Dance Floor: 4x4 Grid)
+            const danceFloorGroup = new THREE.Group();
+            const tileSize = 2.4;
+            const tileGeo = new THREE.BoxGeometry(tileSize - 0.15, 0.12, tileSize - 0.15);
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    const tileMat = new THREE.MeshStandardMaterial({
+                        color: 0xff007f,
+                        emissive: 0xff007f,
+                        emissiveIntensity: 0.8,
+                        roughness: 0.2
+                    });
+                    const tile = new THREE.Mesh(tileGeo, tileMat);
+                    tile.position.set((c - 1.5) * tileSize, 0.06, (r - 1.5) * tileSize);
+                    danceFloorGroup.add(tile);
+                    danceTiles.push(tile);
+                }
+            }
+            danceFloorGroup.position.set(0, 0, 16.5);
+            malibuClubGroup.add(danceFloorGroup);
+
+            // 舞池中的跳舞顾客 NPC
+            const dancerColors = [0x00d2d3, 0xfbc531, 0xff7675, 0xa29bfe];
+            [-2.2, 0, 2.2].forEach((dx, i) => {
+                const dGroup = new THREE.Group();
+                const dBodyGeo = new THREE.BoxGeometry(0.7, 1.1, 0.4);
+                const dBodyMat = new THREE.MeshStandardMaterial({ color: dancerColors[i] });
+                const dBody = new THREE.Mesh(dBodyGeo, dBodyMat);
+                dBody.position.y = 0.95;
+                dGroup.add(dBody);
+                const dHeadGeo = new THREE.BoxGeometry(0.42, 0.42, 0.42);
+                const dHeadMat = new THREE.MeshStandardMaterial({ color: 0xffd5a4 });
+                const dHead = new THREE.Mesh(dHeadGeo, dHeadMat);
+                dHead.position.y = 1.68;
+                dGroup.add(dHead);
+                dGroup.position.set(dx, 0, 16.5 + (i % 2 === 0 ? -1.2 : 1.2));
+                malibuClubGroup.add(dGroup);
+                clubDancers.push(dGroup);
+            });
+
+            // 5. 吧台小酌鸡尾酒信标 (Cocktail Bar Beacon)
+            const beaconGroup = new THREE.Group();
+            const cylinderGeo = new THREE.CylinderGeometry(1.6, 1.6, 5.0, 16, 1, true);
+            const cylinderMat = new THREE.MeshBasicMaterial({
+                color: 0xff00aa,
+                transparent: true,
+                opacity: 0.45,
+                side: THREE.DoubleSide
+            });
+            const cylinder = new THREE.Mesh(cylinderGeo, cylinderMat);
+            cylinder.position.y = 2.5;
+            beaconGroup.add(cylinder);
+
+            // 悬浮旋转马天尼鸡尾酒杯模型
+            const glassCupGeo = new THREE.ConeGeometry(0.65, 0.75, 8);
+            const glassCupMat = new THREE.MeshStandardMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.8 });
+            const cup = new THREE.Mesh(glassCupGeo, glassCupMat);
+            cup.rotation.x = Math.PI;
+            cup.position.y = 1.8;
+            beaconGroup.add(cup);
+
+            const ringGeo = new THREE.RingGeometry(1.4, 2.0, 32);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0xff00aa, side: THREE.DoubleSide });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = -Math.PI / 2;
+            ring.position.y = 0.08;
+            beaconGroup.add(ring);
+
+            beaconGroup.position.set(9.5, 0, 16.5);
+            malibuClubGroup.add(beaconGroup);
+            malibuBarBeacon = beaconGroup;
+
+            malibuClubGroup.position.set(-48, 0, 75);
+            malibuClubGroup.rotation.y = Math.PI / 2;
+            scene.add(malibuClubGroup);
+        }
+
+        // 步入玛里布吧台小酌鸡尾酒
+        function buyMalibuCocktail() {
+            if (playerMoney < 50) {
+                const banner = document.getElementById('malibu-banner');
+                banner.innerText = 'MALIBU CLUB: 资金不足！需要 $50 购买迈阿密鸡尾酒';
+                banner.style.display = 'block';
+                setTimeout(() => { banner.style.display = 'none'; }, 2000);
+                return;
+            }
+            playerMoney -= 50;
+            document.querySelector('.vc-money').innerText = '$' + playerMoney.toString().padStart(8, '0');
+            healthEl.innerText = '100'; // 满血回复
+            sfx.playCocktailDrink();
+
+            // 触发微醺暗角粉红柔光
+            const tipsy = document.getElementById('tipsy-overlay');
+            tipsy.style.opacity = '0.7';
+            setTimeout(() => { tipsy.style.opacity = '0'; }, 3200);
+
+            const banner = document.getElementById('malibu-banner');
+            banner.innerText = 'MALIBU CLUB: 享受了一杯冰镇迈阿密鸡尾酒! 生命值已满格 (❤️ 100) (-$50)';
+            banner.style.display = 'block';
+            setTimeout(() => { banner.style.display = 'none'; }, 2500);
+        }
+
         function createAmmuNationStore() {
             ammuStoreGroup = new THREE.Group();
 
@@ -2815,6 +3080,13 @@
                         if (player.position.distanceTo(beaconWorldPos) < 5.0) {
                             buyAmmuNationSupplies();
                         }
+                    if (malibuBarBeacon) {
+                        const barWorldPos = new THREE.Vector3();
+                        malibuBarBeacon.getWorldPosition(barWorldPos);
+                        if (player.position.distanceTo(barWorldPos) < 5.0) {
+                            buyMalibuCocktail();
+                        }
+                    }
                     }
                 }
                 if (e.code === 'KeyQ') {
@@ -3324,6 +3596,18 @@
                     const beaconWorldPos = new THREE.Vector3();
                     ammuPickupBeacon.getWorldPosition(beaconWorldPos);
                     const distToBeacon = player.position.distanceTo(beaconWorldPos);
+                    
+                // 检测是否位于 Malibu Club 鸡尾酒吧台
+                if (malibuBarBeacon) {
+                    const barWorldPos = new THREE.Vector3();
+                    malibuBarBeacon.getWorldPosition(barWorldPos);
+                    const distToBar = player.position.distanceTo(barWorldPos);
+                    if (distToBar < 4.8) {
+                        vehiclePrompt.innerText = '按 [E] 畅饮冰镇迈阿密鸡尾酒 (恢复满格生命值) ($50)';
+                        vehiclePrompt.style.display = 'block';
+                    }
+                }
+
                     if (distToBeacon < 4.8) {
                         vehiclePrompt.innerText = '按 [E] 补充全部军火弹药与防弹护甲 ($500)';
                         vehiclePrompt.style.display = 'block';
@@ -3715,6 +3999,30 @@
             }
 
             // 更新小地图雷达
+            
+            // 🍸 v0.15 Malibu 迪斯科舞池动感灯光与顾客跳舞律动
+            discoBeatTimer += 0.04;
+            const discoColors = [0xff007f, 0x00f0ff, 0xffe600, 0xa29bfe, 0xff7675, 0x55c842];
+            danceTiles.forEach((tile, idx) => {
+                const colorIdx = Math.floor(discoBeatTimer * 3 + idx) % discoColors.length;
+                tile.material.color.setHex(discoColors[colorIdx]);
+                tile.material.emissive.setHex(discoColors[colorIdx]);
+            });
+
+            // 舞者随节拍起伏晃动
+            clubDancers.forEach((dancer, idx) => {
+                dancer.position.y = Math.abs(Math.sin(discoBeatTimer * 4 + idx)) * 0.22;
+                dancer.rotation.y = Math.sin(discoBeatTimer * 2 + idx) * 0.35;
+            });
+
+            // 靠近 Malibu Club 自动播放迪斯科音乐节拍
+            if (malibuClubGroup) {
+                const clubDist = (inVehicle ? car.position : player.position).distanceTo(malibuClubGroup.position);
+                if (clubDist < 45 && Math.random() < 0.18) {
+                    sfx.playDiscoMusicBeat();
+                }
+            }
+
             drawRadar();
         }
 
@@ -3791,6 +4099,17 @@
                 const tkRelZ = (tankRhino.position.z - activePos.z) * 1.5;
                 ctx.fillStyle = '#2d6a4f';
                 ctx.fillRect(tkRelX - 5, tkRelZ - 5, 10, 10);
+            }
+
+            // 🍸 绘制 Malibu Club 夜总会标记 (粉紫高亮鸡尾酒杯图标)
+            if (malibuClubGroup) {
+                const mRelX = (-48 - activePos.x) * 1.5;
+                const mRelZ = (75 - activePos.z) * 1.5;
+                ctx.fillStyle = '#ff00aa';
+                ctx.fillRect(mRelX - 5, mRelZ - 5, 10, 10);
+                ctx.strokeStyle = '#00f0ff';
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(mRelX - 5, mRelZ - 5, 10, 10);
             }
 
             // 🎯 绘制 Ammu-Nation 军火商行标记 (高亮红色十字靶心)
