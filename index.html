@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Grand Theft Auto: Vice City - Web 3D (v0.12 - PCJ-600 摩托车物理与黄金海岸特技跳跃正式版)</title>
+    <title>Grand Theft Auto: Vice City - Web 3D (v0.13 - Kaufman Cabs 考夫曼出租车营运与计程接送系统)</title>
     <style>
         * {
             box-sizing: border-box;
@@ -55,6 +55,83 @@
 
         
         
+        
+        /* v0.13 Kaufman Cabs 出租车计价 HUD 与乘客结算 */
+        #taxi-hud {
+            position: absolute;
+            top: 24px;
+            left: 28px;
+            background: rgba(18, 5, 29, 0.88);
+            border: 2px solid #fbc531;
+            border-radius: 8px;
+            padding: 10px 18px;
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+            box-shadow: 0 4px 20px rgba(251, 197, 49, 0.35);
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            letter-spacing: 1.5px;
+            z-index: 50;
+            pointer-events: none;
+        }
+        .taxi-hud-title {
+            color: #fbc531;
+            font-size: 20px;
+            text-shadow: 1px 1px 0 #7f6000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .taxi-hud-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 16px;
+            color: #fff;
+            gap: 16px;
+        }
+        .taxi-hud-val {
+            color: #55c842;
+            text-shadow: 1px 1px 0 #0f3d09;
+        }
+        .taxi-hud-timer {
+            color: #e84118;
+            text-shadow: 1px 1px 0 #7f1d1d;
+        }
+
+        #taxi-banner {
+            position: absolute;
+            top: 34%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            font-size: 38px;
+            color: #fbc531;
+            text-shadow: 3px 3px 0 #7f6000, 0 0 24px rgba(251, 197, 49, 0.95);
+            letter-spacing: 3px;
+            display: none;
+            z-index: 70;
+            pointer-events: none;
+            text-align: center;
+            white-space: nowrap;
+            animation: taxiBannerPulse 2.8s forwards ease-out;
+        }
+        .taxi-reward-sub {
+            font-size: 24px;
+            color: #55c842;
+            text-shadow: 2px 2px 0 #0f3d09, 0 0 16px rgba(85,200,66,0.95);
+            letter-spacing: 2px;
+            margin-top: 8px;
+            white-space: nowrap;
+        }
+        @keyframes taxiBannerPulse {
+            0% { opacity: 0; transform: translate(-50%, -70%) scale(0.7); }
+            12% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+            20% { transform: translate(-50%, -50%) scale(1.0); }
+            85% { opacity: 1; transform: translate(-50%, -50%); }
+            100% { opacity: 0; transform: translate(-50%, -30%) scale(0.9); }
+        }
+
         /* v0.12 特技跳跃奖励横幅 (Unique Stunt Jump Banner) */
         #stunt-banner {
             position: absolute;
@@ -383,6 +460,21 @@
         </div>
         
         <div id="cheat-banner">CHEAT ACTIVATED!</div>
+
+        
+    <!-- v0.13 Kaufman Cabs 出租车计价器与结算横幅 -->
+    <div id="taxi-hud">
+        <div class="taxi-hud-title">🚕 KAUFMAN CABS</div>
+        <div class="taxi-hud-row"><span>STATUS:</span><span id="taxi-status-val" style="color:#00d2d3;">SEARCHING...</span></div>
+        <div class="taxi-hud-row"><span>FARE:</span><span id="taxi-fare-val" class="taxi-hud-val">$0</span></div>
+        <div class="taxi-hud-row"><span>TIP:</span><span id="taxi-tip-val" class="taxi-hud-val">$0</span></div>
+        <div class="taxi-hud-row"><span>TIME:</span><span id="taxi-time-val" class="taxi-hud-timer">--</span></div>
+        <div class="taxi-hud-row"><span>FARES DONE:</span><span id="taxi-count-val" style="color:#fbc531;">0</span></div>
+    </div>
+    <div id="taxi-banner">
+        PASSENGER DROPPED OFF!
+        <div class="taxi-reward-sub" id="taxi-reward-text">FARE: +$150 | TIP: +$85 | COMBO x1</div>
+    </div>
 
         <div id="stunt-banner">
             UNIQUE STUNT JUMP COMPLETED!
@@ -772,6 +864,54 @@
                 osc.start(now); osc.stop(now + 0.12);
             }
 
+            
+            // 🚕 v0.13 出租车双音频汽车喇叭、计程表跳表与结算音效
+            playCarHorn() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                [420, 530].forEach(freq => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(freq, now);
+                    gain.gain.setValueAtTime(0.22, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.28);
+                    const filter = this.ctx.createBiquadFilter();
+                    filter.type = 'lowpass';
+                    filter.frequency.setValueAtTime(1400, now);
+                    osc.connect(filter); filter.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(now); osc.stop(now + 0.28);
+                });
+            }
+
+            playTaxiMeterTick() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(980, now);
+                gain.gain.setValueAtTime(0.08, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(now); osc.stop(now + 0.04);
+            }
+
+            playFareReward() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                [587.33, 739.99, 880.00, 1174.66].forEach((freq, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now + i * 0.07);
+                    gain.gain.setValueAtTime(0.28, now + i * 0.07);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.07 + 0.4);
+                    osc.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(now + i * 0.07); osc.stop(now + i * 0.07 + 0.4);
+                });
+            }
+
             playStuntFanfare() {
                 if (!this.ctx) return;
                 const now = this.ctx.currentTime;
@@ -813,6 +953,22 @@
         // --- v0.12 PCJ-600 仿赛摩托车与特技跳跃系统 ---
         let bikePCJ = null;
         let inBike = false;
+
+        // --- v0.13 Kaufman Cabs 出租车与拉客支线任务状态 ---
+        let taxiCab = null;
+        let inTaxi = false;
+        let taxiMissionActive = false;
+        let taxiState = 'IDLE'; // IDLE, SEARCHING, PICKING_UP, ON_TRIP
+        let currentPassenger = null;
+        let passengerArrow = null;
+        let taxiDropoffPillar = null;
+        let taxiDestination = null;
+        let taxiFare = 0;
+        let taxiTip = 0;
+        let taxiTimer = 0;
+        let taxiFaresCount = 0;
+        let taxiTripDistance = 0;
+
         let bikeLean = 0;
         let bikePitch = 0;
         const stuntRamps = [];
@@ -899,6 +1055,29 @@
         // ================= v0.11 程序化高保真贴图系统 =================
         
         // v0.12 特技跳跃斜坡黄黑警示反光纹理
+        
+        // v0.13 Kaufman Cabs 黑黄黑白相间方格旗棋盘拉花纹理
+        function createTaxiCheckerTexture() {
+            const c = document.createElement('canvas');
+            c.width = 128; c.height = 32;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#fbc531';
+            ctx.fillRect(0, 0, 128, 32);
+            ctx.fillStyle = '#1e272e';
+            const size = 16;
+            for (let row = 0; row < 2; row++) {
+                for (let col = 0; col < 8; col++) {
+                    if ((row + col) % 2 === 0) {
+                        ctx.fillRect(col * size, row * size, size, size);
+                    }
+                }
+            }
+            const tex = new THREE.CanvasTexture(c);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(4, 1);
+            return tex;
+        }
+
         function createHazardStripeTexture() {
             const c = document.createElement('canvas');
             c.width = 128; c.height = 128;
@@ -1095,6 +1274,7 @@
             createDockAndBoat();
             createBikePCJ(8, 22); // 🏍️ 停靠在 Ocean View 迎宾大道旁的 PCJ-600
             createStuntRamps();   // 🏁 迈阿密三大经典特技跳跃坡道
+            createKaufmanTaxi(-8, 14); // 🚕 停靠在黄金大道的 Kaufman 经典出租车
 
             // 🌴 v0.11 标志性地标：Ocean View Hotel (罪恶都市经典大饭店)
             const hotelGroup = new THREE.Group();
@@ -1953,6 +2133,276 @@
             buildRamp(8, 105, Math.PI, "South Boulevard Cross Jump");
         }
 
+        
+        // ================= v0.13 Kaufman Cabs 经典复古出租车与营运系统 =================
+        function createKaufmanTaxi(x, z) {
+            taxiCab = new THREE.Group();
+
+            // 1. 主车身 (美式复古三厢轿车底盘，金黄漆面)
+            const bodyGeo = new THREE.BoxGeometry(2.3, 0.72, 4.9);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xfbc531, roughness: 0.35, metalness: 0.5 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 0.65;
+            body.castShadow = true;
+            taxiCab.add(body);
+
+            // 2. 车侧经典棋盘格拉花 (Checker Stripe)
+            const checkerTex = createTaxiCheckerTexture();
+            const stripeGeo = new THREE.BoxGeometry(2.32, 0.18, 4.88);
+            const stripeMat = new THREE.MeshBasicMaterial({ map: checkerTex });
+            const stripe = new THREE.Mesh(stripeGeo, stripeMat);
+            stripe.position.y = 0.72;
+            taxiCab.add(stripe);
+
+            // 3. 驾驶舱三厢车顶与深色车窗
+            const cabinGeo = new THREE.BoxGeometry(1.85, 0.62, 2.5);
+            const cabinMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.2 });
+            const cabin = new THREE.Mesh(cabinGeo, cabinMat);
+            cabin.position.set(0, 1.25, -0.15);
+            cabin.castShadow = true;
+            taxiCab.add(cabin);
+
+            // 4. 车顶高亮发光 TAXI 顶灯 (Lit Roof Sign)
+            const signGroup = new THREE.Group();
+            const signBoxGeo = new THREE.BoxGeometry(0.85, 0.22, 0.38);
+            const signBoxMat = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                emissive: 0xffe600,
+                emissiveIntensity: 0.85,
+                roughness: 0.2
+            });
+            const signBox = new THREE.Mesh(signBoxGeo, signBoxMat);
+            signGroup.add(signBox);
+
+            // TAXI 顶灯黑色字母字样装饰
+            const textPanelGeo = new THREE.BoxGeometry(0.87, 0.12, 0.39);
+            const textPanelMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+            const textPanel = new THREE.Mesh(textPanelGeo, textPanelMat);
+            signGroup.add(textPanel);
+
+            signGroup.position.set(0, 1.66, -0.15);
+            taxiCab.add(signGroup);
+
+            // 5. 复古美式前后电镀镀铬大保险杠
+            const bumperGeo = new THREE.BoxGeometry(2.38, 0.22, 0.25);
+            const bumperMat = new THREE.MeshStandardMaterial({ color: 0xdcdde1, metalness: 0.9, roughness: 0.15 });
+            const fBumper = new THREE.Mesh(bumperGeo, bumperMat);
+            fBumper.position.set(0, 0.45, -2.52);
+            taxiCab.add(fBumper);
+            const rBumper = new THREE.Mesh(bumperGeo, bumperMat);
+            rBumper.position.set(0, 0.45, 2.52);
+            taxiCab.add(rBumper);
+
+            // 6. 前后车灯组
+            const headLightGeo = new THREE.BoxGeometry(0.38, 0.18, 0.05);
+            const headLightMat = new THREE.MeshBasicMaterial({ color: 0xffffe0 });
+            [-0.78, 0.78].forEach(lx => {
+                const hl = new THREE.Mesh(headLightGeo, headLightMat);
+                hl.position.set(lx, 0.68, -2.48);
+                taxiCab.add(hl);
+            });
+
+            const tailLightGeo = new THREE.BoxGeometry(0.36, 0.16, 0.05);
+            const tailLightMat = new THREE.MeshBasicMaterial({ color: 0xff1020 });
+            [-0.82, 0.82].forEach(lx => {
+                const tl = new THREE.Mesh(tailLightGeo, tailLightMat);
+                tl.position.set(lx, 0.72, 2.48);
+                taxiCab.add(tl);
+            });
+
+            // 7. 4个车轮带复古抛光轮毂盖
+            const wheelGeo = new THREE.CylinderGeometry(0.40, 0.40, 0.32, 16);
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1e272e, roughness: 0.85 });
+            const capGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.34, 12);
+            const capMat = new THREE.MeshStandardMaterial({ color: 0xf5f6fa, metalness: 0.85, roughness: 0.2 });
+            const wheelOffsets = [
+                [-1.22, 0.40, 1.45],
+                [1.22, 0.40, 1.45],
+                [-1.22, 0.40, -1.45],
+                [1.22, 0.40, -1.45]
+            ];
+            wheelOffsets.forEach(pos => {
+                const wGroup = new THREE.Group();
+                const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+                wheel.rotation.z = Math.PI / 2;
+                wheel.castShadow = true;
+                const cap = new THREE.Mesh(capGeo, capMat);
+                cap.rotation.z = Math.PI / 2;
+                wGroup.add(wheel);
+                wGroup.add(cap);
+                wGroup.position.set(...pos);
+                taxiCab.add(wGroup);
+            });
+
+            taxiCab.position.set(x, 0, z);
+            taxiCab.userData = { speed: 0, maxSpeed: 1.68, accel: 0.022, friction: 0.982, steer: 0 };
+            scene.add(taxiCab);
+        }
+
+        // --- 出租车支线任务系统核心逻辑 ---
+        function toggleTaxiMission() {
+            if (!inTaxi) return;
+            taxiMissionActive = !taxiMissionActive;
+            const hud = document.getElementById('taxi-hud');
+            if (taxiMissionActive) {
+                sfx.playCheatSound();
+                hud.style.display = 'flex';
+                taxiFaresCount = 0;
+                startNewPassengerSearch();
+            } else {
+                sfx.playDoorSlam();
+                hud.style.display = 'none';
+                clearTaxiMissionAssets();
+            }
+        }
+
+        function clearTaxiMissionAssets() {
+            if (currentPassenger) {
+                scene.remove(currentPassenger);
+                currentPassenger = null;
+            }
+            if (passengerArrow) {
+                scene.remove(passengerArrow);
+                passengerArrow = null;
+            }
+            if (taxiDropoffPillar) {
+                scene.remove(taxiDropoffPillar);
+                taxiDropoffPillar = null;
+            }
+            taxiState = 'IDLE';
+            taxiDestination = null;
+        }
+
+        function startNewPassengerSearch() {
+            clearTaxiMissionAssets();
+            taxiState = 'SEARCHING';
+            document.getElementById('taxi-status-val').innerText = 'SEARCHING...';
+            document.getElementById('taxi-status-val').style.color = '#00d2d3';
+            document.getElementById('taxi-fare-val').innerText = '$0';
+            document.getElementById('taxi-tip-val').innerText = '$0';
+            document.getElementById('taxi-time-val').innerText = '--';
+
+            // 在沿街人行道生成招手乘客 NPC
+            const pGroup = new THREE.Group();
+            const pBodyGeo = new THREE.BoxGeometry(0.8, 1.1, 0.45);
+            const pColors = [0xe84118, 0x9c88ff, 0x44bd32, 0xfbc531, 0xe056fd];
+            const pColor = pColors[Math.floor(Math.random() * pColors.length)];
+            const pBodyMat = new THREE.MeshStandardMaterial({ color: pColor });
+            const pBody = new THREE.Mesh(pBodyGeo, pBodyMat);
+            pBody.position.y = 1.05;
+            pGroup.add(pBody);
+
+            const pHeadGeo = new THREE.BoxGeometry(0.48, 0.48, 0.48);
+            const pHeadMat = new THREE.MeshStandardMaterial({ color: 0xffd5a4 });
+            const pHead = new THREE.Mesh(pHeadGeo, pHeadMat);
+            pHead.position.y = 1.84;
+            pGroup.add(pHead);
+
+            // 乘客招手手臂
+            const armGeo = new THREE.BoxGeometry(0.22, 0.72, 0.22);
+            const arm = new THREE.Mesh(armGeo, pBodyMat);
+            arm.rotation.z = -1.1;
+            arm.position.set(-0.55, 1.35, 0);
+            pGroup.add(arm);
+
+            // 乘客生成位置：在出租车前方 40~90 米的人行道路边
+            const spawnZ = taxiCab.position.z + (Math.random() < 0.5 ? -1 : 1) * (45 + Math.random() * 45);
+            const spawnX = (Math.random() < 0.5 ? -18 : 18);
+            pGroup.position.set(spawnX, 0, Math.min(220, Math.max(-220, spawnZ)));
+            scene.add(pGroup);
+            currentPassenger = pGroup;
+
+            // 头顶旋转粉绿箭头
+            const arrowGeo = new THREE.ConeGeometry(0.45, 1.0, 4);
+            const arrowMat = new THREE.MeshBasicMaterial({ color: 0x55c842, wireframe: false });
+            passengerArrow = new THREE.Mesh(arrowGeo, arrowMat);
+            passengerArrow.rotation.x = Math.PI;
+            passengerArrow.position.set(spawnX, 3.2, pGroup.position.z);
+            scene.add(passengerArrow);
+        }
+
+        function spawnTaxiDestination() {
+            if (taxiDropoffPillar) scene.remove(taxiDropoffPillar);
+
+            // 经典目的地备选点：Ocean View 大饭店门口、东海岸栈桥、南部商业街
+            const destList = [
+                new THREE.Vector3(-18, 0, 0),    // Ocean View Hotel 正门
+                new THREE.Vector3(18, 0, 85),    // 黄金海岸沙滩大道
+                new THREE.Vector3(220, 0, 0),    // 游艇码头入口
+                new THREE.Vector3(-18, 0, -110), // 北部高档住宅区
+                new THREE.Vector3(18, 0, -80)    // 华盛顿购物街
+            ];
+            // 挑选距离当前出租车至少 70 米的地点
+            let bestDest = destList[0];
+            let maxDist = 0;
+            destList.forEach(d => {
+                const dist = taxiCab.position.distanceTo(d);
+                if (dist > maxDist) {
+                    maxDist = dist;
+                    bestDest = d;
+                }
+            });
+            taxiDestination = bestDest;
+
+            // 目的地高耸透明霓虹黄色信标光柱与地面光圈
+            const pillarGroup = new THREE.Group();
+            const cylinderGeo = new THREE.CylinderGeometry(2.4, 2.4, 16, 16, 1, true);
+            const cylinderMat = new THREE.MeshBasicMaterial({
+                color: 0xfbc531,
+                transparent: true,
+                opacity: 0.35,
+                side: THREE.DoubleSide
+            });
+            const cylinder = new THREE.Mesh(cylinderGeo, cylinderMat);
+            cylinder.position.y = 8;
+            pillarGroup.add(cylinder);
+
+            // 地面旋转光圈
+            const ringGeo = new THREE.RingGeometry(1.8, 2.5, 32);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0xffe600, side: THREE.DoubleSide });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = -Math.PI / 2;
+            ring.position.y = 0.08;
+            pillarGroup.add(ring);
+
+            pillarGroup.position.copy(taxiDestination);
+            scene.add(pillarGroup);
+            taxiDropoffPillar = pillarGroup;
+
+            // 设定初始车费、小费与倒计时
+            taxiTripDistance = taxiCab.position.distanceTo(taxiDestination);
+            taxiFare = Math.round(120 + taxiTripDistance * 1.8);
+            taxiTip = Math.round(80 + taxiTripDistance * 0.9);
+            taxiTimer = Math.max(30, Math.round(taxiTripDistance / 4.2) + 18);
+
+            document.getElementById('taxi-status-val').innerText = 'DELIVERING';
+            document.getElementById('taxi-status-val').style.color = '#55c842';
+            document.getElementById('taxi-fare-val').innerText = '$' + taxiFare;
+            document.getElementById('taxi-tip-val').innerText = '$' + taxiTip;
+        }
+
+        function completeTaxiDropoff() {
+            sfx.playFareReward();
+            const totalEarned = taxiFare + Math.max(0, taxiTip);
+            playerMoney += totalEarned;
+            document.querySelector('.vc-money').innerText = '$' + playerMoney.toString().padStart(8, '0');
+            taxiFaresCount++;
+
+            // 弹出结算横幅
+            const banner = document.getElementById('taxi-banner');
+            const sub = document.getElementById('taxi-reward-text');
+            if (sub) {
+                sub.innerText = `FARE: +$${taxiFare} | TIP: +$${Math.max(0, taxiTip)} | TOTAL: +$${totalEarned} (COMBO x${taxiFaresCount})`;
+            }
+            banner.style.display = 'block';
+            setTimeout(() => { banner.style.display = 'none'; }, 2800);
+
+            document.getElementById('taxi-count-val').innerText = taxiFaresCount;
+
+            // 开启寻找下一位乘客
+            startNewPassengerSearch();
+        }
+
         function createVehicle() {
             // 经典超跑 Infernus (车身流线型与尾翼)
             car = new THREE.Group();
@@ -2093,6 +2543,12 @@
 
                 if (e.code === 'KeyF' || e.code === 'Enter') {
                     toggleVehicle();
+                }
+                if (e.code === 'KeyH') {
+                    sfx.playCarHorn();
+                }
+                if (e.code === 'KeyT') {
+                    toggleTaxiMission();
                 }
             });
             window.addEventListener('keyup', e => {
@@ -2246,14 +2702,20 @@
             const distToBoat = speedBoat ? player.position.distanceTo(speedBoat.position) : 999;
             const distToTank = tankRhino ? player.position.distanceTo(tankRhino.position) : 999;
             const distToBike = bikePCJ ? player.position.distanceTo(bikePCJ.position) : 999;
+            const distToTaxi = taxiCab ? player.position.distanceTo(taxiCab.position) : 999;
 
-            if (!inVehicle && !inBoat && !inTank && !inBike) {
-                if (distToBike < 4.8) {
+            if (!inVehicle && !inBoat && !inTank && !inBike && !inTaxi) {
+                if (distToTaxi < 5.2) {
+                    inTaxi = true;
+                    sfx.playDoorSlam();
+                    document.getElementById("speedo-box").style.display = "block";
+                    player.visible = false;
+                    vehiclePrompt.style.display = 'none';
+                } else if (distToBike < 4.8) {
                     inBike = true;
                     sfx.playDoorSlam();
                     document.getElementById("speedo-box").style.display = "block";
                     vehiclePrompt.style.display = 'none';
-                    // 🏍️ Tommy 跨骑在 PCJ-600 上，保持角色可见
                     player.visible = true;
                 } else if (distToTank < 6.5) {
                     inTank = true;
@@ -2274,6 +2736,13 @@
                     player.visible = false;
                     vehiclePrompt.style.display = 'none';
                 }
+            } else if (inTaxi) {
+                inTaxi = false;
+                if (taxiMissionActive) toggleTaxiMission(); // 下车自动结算/退出出租车任务
+                sfx.playDoorSlam();
+                document.getElementById("speedo-box").style.display = "none";
+                player.visible = true;
+                player.position.set(taxiCab.position.x - 2.6, 0, taxiCab.position.z);
             } else if (inBike) {
                 inBike = false;
                 sfx.playDoorSlam();
@@ -2379,6 +2848,83 @@
                 camera.position.lerp(bikePCJ.position.clone().add(offset), 0.16);
                 camera.lookAt(bikePCJ.position.clone().add(new THREE.Vector3(0, 1.1, 0)));
             }
+
+            // 🚕 v0.13 Kaufman Cabs 出租车物理与驾驶逻辑
+            if (inTaxi && taxiCab) {
+                const tData = taxiCab.userData;
+                if (keys['KeyW'] || keys['ArrowUp']) tData.speed = Math.min(tData.maxSpeed, tData.speed + tData.accel);
+                if (keys['KeyS'] || keys['ArrowDown']) tData.speed = Math.max(-tData.maxSpeed * 0.4, tData.speed - tData.accel);
+                if (keys['KeyA'] || keys['ArrowLeft']) taxiCab.rotation.y += 0.03 * (tData.speed >= 0 ? 1 : -1);
+                if (keys['KeyD'] || keys['ArrowRight']) taxiCab.rotation.y -= 0.03 * (tData.speed >= 0 ? 1 : -1);
+
+                tData.speed *= tData.friction;
+                taxiCab.translateZ(-tData.speed);
+
+                if (keys['KeyW'] || keys['ArrowUp'] || keys['KeyS'] || keys['ArrowDown']) {
+                    if (Math.random() < 0.22) sfx.playEngineRev(tData.speed * 0.9);
+                }
+                const speedMph = Math.round(Math.abs(tData.speed) * 80);
+                document.getElementById('speedo-val').innerText = speedMph;
+
+                // 第三人称追尾平滑视角
+                const offset = new THREE.Vector3(0, 3.4, 7.8).applyAxisAngle(new THREE.Vector3(0, 1, 0), taxiCab.rotation.y);
+                camera.position.lerp(taxiCab.position.clone().add(offset), 0.14);
+                camera.lookAt(taxiCab.position.clone().add(new THREE.Vector3(0, 1.2, 0)));
+            }
+
+            // 🚕 出租车营运支线任务状态轮询
+            if (inTaxi && taxiMissionActive && taxiCab) {
+                const tSpeed = Math.abs(taxiCab.userData.speed);
+
+                if (taxiState === 'SEARCHING' && currentPassenger) {
+                    // 乘客头顶箭头跳跃与旋转
+                    if (passengerArrow) {
+                        passengerArrow.rotation.y += 0.05;
+                        passengerArrow.position.y = 3.2 + Math.sin(Date.now() * 0.005) * 0.3;
+                    }
+                    const distToP = taxiCab.position.distanceTo(currentPassenger.position);
+                    if (distToP < 5.8 && tSpeed < 0.3) {
+                        // 停稳上客！
+                        sfx.playDoorSlam();
+                        scene.remove(currentPassenger);
+                        currentPassenger = null;
+                        if (passengerArrow) {
+                            scene.remove(passengerArrow);
+                            passengerArrow = null;
+                        }
+                        taxiState = 'ON_TRIP';
+                        spawnTaxiDestination();
+                    }
+                } else if (taxiState === 'ON_TRIP' && taxiDestination) {
+                    // 目的地光柱旋转
+                    if (taxiDropoffPillar) {
+                        taxiDropoffPillar.rotation.y += 0.03;
+                    }
+                    // 倒计时递减
+                    taxiTimer -= 0.016;
+                    // 小费随时间递减
+                    taxiTip = Math.max(0, Math.round(taxiTip - 0.035));
+
+                    document.getElementById('taxi-time-val').innerText = Math.max(0, taxiTimer).toFixed(1) + 's';
+                    document.getElementById('taxi-tip-val').innerText = '$' + taxiTip;
+
+                    const distToDest = taxiCab.position.distanceTo(taxiDestination);
+                    if (distToDest < 6.2 && tSpeed < 0.35) {
+                        // 停稳下客结算！
+                        completeTaxiDropoff();
+                    } else if (taxiTimer <= 0) {
+                        // 超时！乘客负气下车
+                        sfx.playDoorSlam();
+                        const banner = document.getElementById('taxi-banner');
+                        const sub = document.getElementById('taxi-reward-text');
+                        if (sub) sub.innerText = 'TIME EXPIRED! PASSENGER LEFT ANGRY ($0)';
+                        banner.style.display = 'block';
+                        setTimeout(() => { banner.style.display = 'none'; }, 2200);
+                        startNewPassengerSearch();
+                    }
+                }
+            }
+
  else {
                 // 步行移动与控制逻辑
                 const moveSpeed = (keys['ShiftLeft'] ? 0.32 : 0.16);
@@ -2396,12 +2942,16 @@
                     player.rotation.y = Math.atan2(moveDir.x, moveDir.z);
                 }
 
-                // 检测靠近车辆、快艇、PCJ-600 摩托车或主战坦克
+                // 检测靠近出租车、摩托车、超跑、快艇或主战坦克
+                const distToTaxi = taxiCab ? player.position.distanceTo(taxiCab.position) : 999;
                 const distToCar = player.position.distanceTo(car.position);
                 const distToBoat = speedBoat ? player.position.distanceTo(speedBoat.position) : 999;
                 const distToTank = tankRhino ? player.position.distanceTo(tankRhino.position) : 999;
                 const distToBike = bikePCJ ? player.position.distanceTo(bikePCJ.position) : 999;
-                if (distToBike < 4.8) {
+                if (distToTaxi < 5.2) {
+                    vehiclePrompt.innerText = '按 [F] 驾驶 Kaufman Cabs 复古出租车 (按 [T] 拉客 / [H] 鸣笛)';
+                    vehiclePrompt.style.display = 'block';
+                } else if (distToBike < 4.8) {
                     vehiclePrompt.innerText = '按 [F] 或 [Enter] 跨骑 PCJ-600 超级仿赛摩托车';
                     vehiclePrompt.style.display = 'block';
                 } else if (distToTank < 6.5) {
@@ -2710,7 +3260,7 @@
                     healthEl.innerText = '100';
                     armorEl.innerText = '100';
                     player.position.set(0, 0, 15);
-                    if (inVehicle || inBoat || inTank || inBike) toggleVehicle();
+                    if (inVehicle || inBoat || inTank || inBike || inTaxi) toggleVehicle();
                     document.getElementById('wasted-screen').style.display = 'none';
                     isDead = false;
                 }, 3500);
@@ -2796,7 +3346,7 @@
             ctx.save();
             ctx.translate(cx, cy);
 
-            const activePos = inVehicle ? car.position : player.position;
+            const activePos = (inVehicle ? car.position : (inTaxi ? taxiCab.position : (inBike ? bikePCJ.position : player.position)));
             const angle = inVehicle ? -car.rotation.y : -cameraAngle.yaw;
             ctx.rotate(angle);
 
@@ -2852,6 +3402,35 @@
                 const tkRelZ = (tankRhino.position.z - activePos.z) * 1.5;
                 ctx.fillStyle = '#2d6a4f';
                 ctx.fillRect(tkRelX - 5, tkRelZ - 5, 10, 10);
+            }
+
+            // 🚕 绘制 Kaufman 出租车标记 (明黄色方块)
+            if (taxiCab) {
+                const tRelX = (taxiCab.position.x - activePos.x) * 1.5;
+                const tRelZ = (taxiCab.position.z - activePos.z) * 1.5;
+                ctx.fillStyle = '#fbc531';
+                ctx.fillRect(tRelX - 4, tRelZ - 4, 8, 8);
+            }
+
+            // 🚶 绘制出租车拉客乘客标记 (粉青闪烁光点)
+            if (currentPassenger) {
+                const pRelX = (currentPassenger.position.x - activePos.x) * 1.5;
+                const pRelZ = (currentPassenger.position.z - activePos.z) * 1.5;
+                ctx.fillStyle = (Math.floor(Date.now() / 250) % 2 === 0 ? '#ff007f' : '#00d2d3');
+                ctx.beginPath();
+                ctx.arc(pRelX, pRelZ, 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // 🏁 绘制出租车送达目的地光圈 (黄色雷达大信标)
+            if (taxiDestination && taxiState === 'ON_TRIP') {
+                const dRelX = (taxiDestination.x - activePos.x) * 1.5;
+                const dRelZ = (taxiDestination.z - activePos.z) * 1.5;
+                ctx.strokeStyle = '#ffe600';
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                ctx.arc(dRelX, dRelZ, 6, 0, Math.PI * 2);
+                ctx.stroke();
             }
 
             // 🏍️ 绘制 PCJ-600 摩托车标记 (亮青色高亮圆环)
